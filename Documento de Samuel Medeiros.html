@@ -1,0 +1,1665 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StatsCard - Analisador Tático e IA</title>
+  
+  <!-- Configurações PWA -->
+  <meta name="theme-color" content="#1e293b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="StatsCard" />
+  <link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22StatsCard%20Analisador%22%2C%22short_name%22%3A%22StatsCard%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230f172a%22%2C%22theme_color%22%3A%22%231e293b%22%7D" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .transition-max-height {
+      transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .drag-over {
+      border-color: #6366f1 !important;
+      background-color: rgba(99, 102, 241, 0.1) !important;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.05); opacity: 1; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .badge-pulse {
+      animation: pulse-ring 2s infinite ease-in-out;
+    }
+    .dimmed-card {
+      opacity: 0.7;
+      filter: grayscale(25%);
+      transition: all 0.3s ease;
+    }
+    .dimmed-card:hover {
+      opacity: 1;
+      filter: grayscale(0%);
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans flex flex-col pb-24 selection:bg-indigo-500 selection:text-white">
+
+  <!-- Mensagem Toast de Notificação -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 transition-opacity duration-300 opacity-0 pointer-events-none">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+    <span id="toast-message" class="text-sm font-medium">Ação realizada com sucesso!</span>
+  </div>
+
+  <!-- Modal Comparador de Confrontos Diretos -->
+  <div id="compare-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="p-4 bg-slate-800/90 border-b border-slate-700 flex justify-between items-center">
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+          <h3 id="modal-match-title" class="text-base font-bold text-white">Comparativo de Confronto Direto</h3>
+        </div>
+        <button id="close-modal-btn" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-700 transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div id="modal-body-content" class="p-6 overflow-y-auto space-y-6 flex-1 text-xs text-slate-300">
+        <!-- Conteúdo dinâmico -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal do Gerador de Imagem do Bilhete -->
+  <div id="ticket-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md flex flex-col shadow-2xl overflow-hidden p-5 space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          Bilhete Gerado para Redes Sociais
+        </h3>
+        <button id="close-ticket-modal-btn" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-700 transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="flex justify-center bg-slate-950 p-2 rounded-xl border border-slate-700 overflow-hidden">
+        <canvas id="ticket-canvas" width="600" height="800" class="w-full h-auto rounded-lg shadow-lg"></canvas>
+      </div>
+      <div class="flex justify-between items-center gap-2 pt-2">
+        <span class="text-[11px] text-slate-400">Salve a imagem ou baixe diretamente.</span>
+        <button id="download-ticket-btn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          Baixar Imagem
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cabeçalho Principal -->
+  <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="p-2 bg-indigo-600 rounded-lg text-white">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+        </div>
+        <h1 class="text-xl font-bold tracking-wide text-white">StatsCard <span class="text-indigo-400 text-sm font-normal">| Analisador Tático & IA</span></h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btn-global-ia-analysis" class="text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-900/30">
+          <span>🤖 Análise Geral (IA)</span>
+        </button>
+        <button id="toggle-history-btn" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 border border-slate-600">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          <span class="hidden sm:inline">Histórico</span>
+        </button>
+        <button id="install-pwa-btn" class="hidden text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 py-2 rounded-lg transition-colors items-center gap-1.5 shadow">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          <span>Instalar</span>
+        </button>
+        <button id="toggle-input-btn" class="text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-3.5 py-2 rounded-lg transition-colors flex items-center gap-1.5 shadow">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          <span class="hidden sm:inline">Importar</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+
+    <!-- Painel da Análise Geral de IA -->
+    <section id="global-ia-panel" class="hidden bg-slate-800 border border-emerald-500/50 rounded-xl p-5 shadow-2xl space-y-3">
+      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 class="text-sm font-bold text-emerald-400 flex items-center gap-2">
+          <span>🤖 Relatório Consolidado de Confirmação dos Cards (IA)</span>
+        </h3>
+        <button id="close-global-ia-btn" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div id="global-ia-content" class="text-xs text-slate-200 bg-slate-900/80 p-4 rounded-lg border border-slate-700/80 leading-relaxed whitespace-pre-wrap">
+        Gerando diagnóstico geral da rodada...
+      </div>
+    </section>
+
+    <!-- Painel de Relatório de Desempenho e ROI -->
+    <section class="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-xl grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+      <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60">
+        <span class="text-[10px] text-slate-400 uppercase font-semibold block">Resolvidas</span>
+        <span id="stat-total-resolved" class="text-lg font-bold text-slate-200">0</span>
+      </div>
+      <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60">
+        <span class="text-[10px] text-slate-400 uppercase font-semibold block">Taxa de Acerto</span>
+        <span id="stat-win-rate" class="text-lg font-bold text-emerald-400">0%</span>
+      </div>
+      <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60">
+        <span class="text-[10px] text-slate-400 uppercase font-semibold block">Lucro / Prejuízo</span>
+        <span id="stat-profit-loss" class="text-lg font-bold text-slate-200">0.00 u</span>
+      </div>
+      <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-700/60">
+        <span class="text-[10px] text-slate-400 uppercase font-semibold block">ROI Estimado</span>
+        <span id="stat-roi" class="text-lg font-bold text-indigo-400">0.0%</span>
+      </div>
+    </section>
+
+    <!-- Seção de Entrada de Texto e Arquivos -->
+    <section id="input-section" class="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-xl hidden">
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="text-lg font-semibold text-indigo-300 flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+          Entrada de Dados (Texto, TXT ou JSON)
+        </h2>
+        <span class="text-xs text-slate-400">Processamento offline e local</span>
+      </div>
+
+      <div id="drop-zone" class="border-2 border-dashed border-slate-600 hover:border-indigo-500 rounded-xl p-4 text-center bg-slate-900/50 mb-4 transition-colors cursor-pointer">
+        <svg class="w-8 h-8 text-indigo-400 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+        <p class="text-xs text-slate-300 font-medium">Arraste e solte um arquivo <span class="text-indigo-400 font-bold">.TXT</span> ou <span class="text-indigo-400 font-bold">.JSON</span> aqui</p>
+        <p class="text-[10px] text-slate-500 mt-0.5">ou clique para selecionar do seu computador</p>
+        <input type="file" id="file-input" accept=".txt,.json" class="hidden" />
+      </div>
+
+      <textarea id="raw-text-input" class="w-full h-40 bg-slate-900 border border-slate-700 rounded-lg p-3 text-slate-200 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono resize-y" placeholder="Cole o texto das partidas aqui..."></textarea>
+      
+      <div class="flex justify-between items-center mt-3 flex-wrap gap-2">
+        <button id="load-sample-btn" class="text-xs text-slate-400 hover:text-indigo-300 underline">
+          Carregar exemplo de teste
+        </button>
+
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+            <input type="checkbox" id="append-mode-checkbox" checked class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-indigo-500">
+            <span>Manter partidas existentes (acumular)</span>
+          </label>
+
+          <div class="flex gap-2">
+            <button id="clear-textarea-btn" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs text-slate-300 transition-colors">
+              Limpar
+            </button>
+            <button id="process-btn" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs rounded-lg transition-colors flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
+              Processar Dados
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Seção de Histórico Permanente (Gaveta) -->
+    <section id="history-section" class="hidden bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-xl space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h2 class="text-sm font-bold text-indigo-300 flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          Histórico Arquivado de Partidas
+        </h2>
+        <button id="clear-history-perm-btn" class="text-xs text-rose-400 hover:text-rose-300 underline font-semibold">
+          Limpar Histórico Permanente
+        </button>
+      </div>
+      <div id="history-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+        <!-- Itens do histórico inseridos dinamicamente -->
+      </div>
+    </section>
+
+    <!-- Atalhos Rápidos de Filtro -->
+    <section class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+      <span class="text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap mr-1">Atalhos:</span>
+      <button id="btn-quick-high-conf" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors">
+        ⚡ Alta Confiança (+2.5 e +1.5)
+      </button>
+      <button id="btn-quick-super-odds" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors">
+        🔥 Super Odds (≥ 2.00)
+      </button>
+      <button id="btn-quick-corners" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors">
+        ⛳ Over Escanteios (≥ 10.0)
+      </button>
+      <button id="btn-filter-status-green" class="bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors">
+        ✅ Apenas Greens
+      </button>
+    </section>
+
+    <!-- Filtro por Data -->
+    <section class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none" id="date-tabs-container">
+      <button data-date="all" class="date-tab bg-indigo-600 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shadow transition-colors">
+        Todas as Datas
+      </button>
+    </section>
+
+    <!-- Barra de Pesquisa e Filtros Avançados -->
+    <section class="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-lg space-y-4">
+      <div class="flex flex-col md:flex-row gap-3">
+        <div class="relative flex-1">
+          <svg class="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          <input type="text" id="search-input" placeholder="Buscar por time, sugestão de aposta ou informação..." class="w-full bg-slate-900 border border-slate-700 rounded-lg pl-10 pr-4 py-2.5 text-slate-200 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+        </div>
+        <button id="toggle-filters-btn" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 border border-slate-600">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+          <span>Filtros Avançados</span>
+          <span id="active-filters-badge" class="hidden bg-indigo-500 text-white text-xs px-2 py-0.5 rounded-full">0</span>
+        </button>
+      </div>
+
+      <div id="advanced-filters" class="hidden pt-3 border-t border-slate-700 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Confiança +2.5</label>
+          <select id="filter-plus-25" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <option value="">Todas</option>
+            <option value="Alta">Alta</option>
+            <option value="Média">Média</option>
+            <option value="Baixa">Baixa</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Confiança +1.5</label>
+          <select id="filter-plus-15" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <option value="">Todas</option>
+            <option value="Alta">Alta</option>
+            <option value="Média">Média</option>
+            <option value="Baixa">Baixa</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Status do Jogo / Resultado</label>
+          <select id="filter-status" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <option value="">Todos</option>
+            <option value="pending">⏳ Agendado / Pendente</option>
+            <option value="live">● Em Andamento</option>
+            <option value="green">✅ Green (Ganha)</option>
+            <option value="red">❌ Red (Perdida)</option>
+            <option value="void">⚪ Anulado</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Min. Média de Gols</label>
+          <input type="number" step="0.5" id="filter-min-gols" placeholder="Ex: 2.0" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Min. Média Escanteios</label>
+          <input type="number" step="0.5" id="filter-min-escanteios" placeholder="Ex: 9.5" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Odd Mínima Sugerida</label>
+          <input type="number" step="0.05" id="filter-min-odd" placeholder="Ex: 1.40" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Ordenar por</label>
+          <select id="sort-by" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <option value="time-asc">Horário (Mais cedo primeiro)</option>
+            <option value="time-desc">Horário (Mais tarde primeiro)</option>
+            <option value="odd-desc">Maior Odd</option>
+            <option value="odd-asc">Menor Odd</option>
+            <option value="gols-desc">Maior Média de Gols</option>
+            <option value="escanteios-desc">Maior Média de Escanteios</option>
+          </select>
+        </div>
+
+        <div class="flex items-end justify-end">
+          <button id="reset-filters-btn" class="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            Redefinir Filtros
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Controle Global -->
+    <div class="flex items-center justify-between text-xs text-slate-400 px-1 flex-wrap gap-2">
+      <span id="results-count" class="font-medium text-slate-300">Exibindo 0 partidas</span>
+      
+      <div class="flex items-center gap-3">
+        <button id="export-json-btn" class="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          Exportar JSON
+        </button>
+
+        <button id="export-btn" class="text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-semibold">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          Exportar TXT
+        </button>
+
+        <span class="text-slate-600">|</span>
+
+        <button id="clear-all-matches-btn" class="text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+          Limpar Tudo
+        </button>
+      </div>
+    </div>
+
+    <!-- Container dos Cards -->
+    <section id="cards-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <!-- Cards gerados dinamicamente -->
+    </section>
+
+    <!-- Estado Vazio -->
+    <div id="empty-state" class="hidden text-center py-16 bg-slate-800/50 rounded-xl border border-dashed border-slate-700">
+      <svg class="w-12 h-12 text-slate-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 002 2h1.5a2.5 2.5 0 002.5-2.5V11.085M11 20c7.18 0 10-5 10-9s-2.82-9-10-9-10 5-10 9 2.82 9 10 9z"></path></svg>
+      <h3 class="text-lg font-medium text-slate-300">Nenhuma partida armazenada</h3>
+      <p class="text-sm text-slate-500 max-w-md mx-auto mt-1">Cole dados na área de texto ou importe um arquivo .TXT/.JSON para visualizar os cards.</p>
+    </div>
+
+  </main>
+
+  <!-- Múltipla Flutuante -->
+  <div id="multi-bet-bar" class="fixed bottom-0 left-0 right-0 bg-slate-800/95 border-t border-indigo-500/50 backdrop-blur-md p-4 shadow-2xl z-40 transform translate-y-full transition-transform duration-300">
+    <div class="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-3">
+      <div class="flex items-center gap-3">
+        <div class="p-2 bg-indigo-600 rounded-lg text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+        </div>
+        <div>
+          <span class="text-xs text-indigo-300 block font-semibold uppercase tracking-wider">Aposta Combinada / Múltipla</span>
+          <span id="multi-count" class="text-sm font-bold text-white">0 jogos selecionados</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div>
+          <span class="text-[10px] text-slate-400 block uppercase font-semibold">Odd Total</span>
+          <span id="multi-odd" class="text-xl font-extrabold text-emerald-400">@1.00</span>
+        </div>
+        <button id="generate-multi-ticket-btn" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow transition-colors flex items-center gap-1.5" title="Gerar Imagem do Bilhete">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          Gerar Bilhete
+        </button>
+        <button id="copy-multi-btn" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow transition-colors flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 02-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+          Copiar Texto
+        </button>
+        <button id="clear-multi-btn" class="p-2 text-slate-400 hover:text-rose-400 transition-colors text-sm" title="Desmarcar todos">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="bg-slate-800 border-t border-slate-700 py-4 text-center text-xs text-slate-500">
+    StatsCard Dashboard &copy; 2026 - Analisador Tático de Futebol
+  </footer>
+
+  <script>
+    // Configuração de API (O ambiente de execução fornece a chave automaticamente em runtime)
+    const apiKey = ""; 
+
+    function sanitizeText(str) {
+      if (!str) return '';
+      return str.replace(/\*/g, '').trim();
+    }
+
+    // Service Worker PWA
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+        self.addEventListener('install', e => e.waitUntil(self.skipWaiting()));
+        self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+        self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => caches.match(e.request))));
+      `;
+      const blob = new Blob([swCode], { type: 'application/javascript' });
+      navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+    }
+
+    let deferredPrompt;
+    const installPwaBtn = document.getElementById('install-pwa-btn');
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installPwaBtn.classList.remove('hidden');
+      installPwaBtn.classList.add('flex');
+    });
+
+    installPwaBtn.addEventListener('click', () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(() => {
+          deferredPrompt = null;
+          installPwaBtn.classList.add('hidden');
+        });
+      }
+    });
+
+    // Estado da Aplicação
+    let matchesData = JSON.parse(localStorage.getItem('statsCardMatches')) || [];
+    let permanentHistory = JSON.parse(localStorage.getItem('statsCardHistoryPerm')) || [];
+    let selectedForMulti = new Set();
+    let selectedDateFilter = 'all';
+
+    const sampleText = `Sheffield United x Bolton Wanderers - [01/09/2026 - 15:45]  
++2,5: Média
++1,5: Alta
+Quantidade esperada de gols no jogo: 2.5  
+Média de escanteios: 11.0  
+Média de cartões: 3.6
+Info: Nas últimas 10 partidas do Sheffield Utd saíram 25 gols e no Bolton saíram 27 gols.  
+Em 100% dos jogos do Sheffield United tiveram:
+7 escanteios a favor
+4 escanteios contra
+1 cartão.
+Em 100% dos jogos do Bolton Wanderers jogando fora:
+4 escanteios a favor
+6 escanteios contra
+2 cartões.
+Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`;
+
+    // Elementos DOM
+    const rawTextInput = document.getElementById('raw-text-input');
+    const processBtn = document.getElementById('process-btn');
+    const clearTextareaBtn = document.getElementById('clear-textarea-btn');
+    const loadSampleBtn = document.getElementById('load-sample-btn');
+    const toggleInputBtn = document.getElementById('toggle-input-btn');
+    const inputSection = document.getElementById('input-section');
+    const cardsContainer = document.getElementById('cards-container');
+    const emptyState = document.getElementById('empty-state');
+    const resultsCount = document.getElementById('results-count');
+    const clearAllMatchesBtn = document.getElementById('clear-all-matches-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const exportJsonBtn = document.getElementById('export-json-btn');
+    const appendModeCheckbox = document.getElementById('append-mode-checkbox');
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const dateTabsContainer = document.getElementById('date-tabs-container');
+
+    // Histórico
+    const toggleHistoryBtn = document.getElementById('toggle-history-btn');
+    const historySection = document.getElementById('history-section');
+    const historyContainer = document.getElementById('history-container');
+    const clearHistoryPermBtn = document.getElementById('clear-history-perm-btn');
+
+    // IA Painel Global
+    const btnGlobalIaAnalysis = document.getElementById('btn-global-ia-analysis');
+    const globalIaPanel = document.getElementById('global-ia-panel');
+    const globalIaContent = document.getElementById('global-ia-content');
+    const closeGlobalIaBtn = document.getElementById('close-global-ia-btn');
+
+    // Dashboard
+    const statTotalResolved = document.getElementById('stat-total-resolved');
+    const statWinRate = document.getElementById('stat-win-rate');
+    const statProfitLoss = document.getElementById('stat-profit-loss');
+    const statRoi = document.getElementById('stat-roi');
+
+    // Modais
+    const compareModal = document.getElementById('compare-modal');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const modalMatchTitle = document.getElementById('modal-match-title');
+    const modalBodyContent = document.getElementById('modal-body-content');
+
+    const ticketModal = document.getElementById('ticket-modal');
+    const closeTicketModalBtn = document.getElementById('close-ticket-modal-btn');
+    const downloadTicketBtn = document.getElementById('download-ticket-btn');
+    const ticketCanvas = document.getElementById('ticket-canvas');
+
+    // Múltipla
+    const multiBetBar = document.getElementById('multi-bet-bar');
+    const multiCount = document.getElementById('multi-count');
+    const multiOdd = document.getElementById('multi-odd');
+    const copyMultiBtn = document.getElementById('copy-multi-btn');
+    const generateMultiTicketBtn = document.getElementById('generate-multi-ticket-btn');
+    const clearMultiBtn = document.getElementById('clear-multi-btn');
+
+    // Filtros
+    const searchInput = document.getElementById('search-input');
+    const toggleFiltersBtn = document.getElementById('toggle-filters-btn');
+    const advancedFilters = document.getElementById('advanced-filters');
+    const activeFiltersBadge = document.getElementById('active-filters-badge');
+    const filterPlus25 = document.getElementById('filter-plus-25');
+    const filterPlus15 = document.getElementById('filter-plus-15');
+    const filterStatus = document.getElementById('filter-status');
+    const filterMinGols = document.getElementById('filter-min-gols');
+    const filterMinEscanteios = document.getElementById('filter-min-escanteios');
+    const filterMinOdd = document.getElementById('filter-min-odd');
+    const sortBy = document.getElementById('sort-by');
+    const resetFiltersBtn = document.getElementById('reset-filters-btn');
+
+    // Atalhos
+    const btnQuickHighConf = document.getElementById('btn-quick-high-conf');
+    const btnQuickSuperOdds = document.getElementById('btn-quick-super-odds');
+    const btnQuickCorners = document.getElementById('btn-quick-corners');
+    const btnFilterStatusGreen = document.getElementById('btn-filter-status-green');
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-message');
+      toastMsg.textContent = message;
+      toast.classList.remove('opacity-0', 'pointer-events-none');
+      setTimeout(() => toast.classList.add('opacity-0', 'pointer-events-none'), 2500);
+    }
+
+    function saveToLocalStorage() {
+      localStorage.setItem('statsCardMatches', JSON.stringify(matchesData));
+      localStorage.setItem('statsCardHistoryPerm', JSON.stringify(permanentHistory));
+      updateDashboardStats();
+      renderHistoryItems();
+    }
+
+    toggleInputBtn.addEventListener('click', () => inputSection.classList.toggle('hidden'));
+    toggleHistoryBtn.addEventListener('click', () => {
+      historySection.classList.toggle('hidden');
+      renderHistoryItems();
+    });
+
+    toggleFiltersBtn.addEventListener('click', () => advancedFilters.classList.toggle('hidden'));
+    loadSampleBtn.addEventListener('click', () => rawTextInput.value = sampleText);
+    clearTextareaBtn.addEventListener('click', () => rawTextInput.value = '');
+
+    closeModalBtn.addEventListener('click', () => compareModal.classList.add('hidden'));
+    compareModal.addEventListener('click', (e) => { if (e.target === compareModal) compareModal.classList.add('hidden'); });
+
+    closeTicketModalBtn.addEventListener('click', () => ticketModal.classList.add('hidden'));
+    ticketModal.addEventListener('click', (e) => { if (e.target === ticketModal) ticketModal.classList.add('hidden'); });
+
+    closeGlobalIaBtn.addEventListener('click', () => globalIaPanel.classList.add('hidden'));
+
+    // Resetar Filtros
+    resetFiltersBtn.addEventListener('click', () => {
+      filterPlus25.value = '';
+      filterPlus15.value = '';
+      filterStatus.value = '';
+      filterMinGols.value = '';
+      filterMinEscanteios.value = '';
+      filterMinOdd.value = '';
+      searchInput.value = '';
+      sortBy.value = 'time-asc';
+      renderCards();
+      showToast('Filtros redefinidos!');
+    });
+
+    // Chamada à API Gemini com tratamento de retentativa e backoff exponencial
+    async function callGeminiApi(promptText, retries = 5, delay = 1000) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+      const payload = {
+        contents: [{ parts: [{ text: promptText }] }]
+      };
+
+      for (let i = 0; i < retries; i++) {
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          return data.candidates?.[0]?.content?.parts?.[0]?.text || "Não foi possível gerar uma resposta tática no momento.";
+        } catch (err) {
+          if (i === retries - 1) throw err;
+          await new Promise(r => setTimeout(r, delay * Math.pow(2, i)));
+        }
+      }
+    }
+
+    // Análise de IA por Card de Jogo
+    async function analyzeSingleMatchIA(matchId, event) {
+      if (event) event.stopPropagation();
+      const match = matchesData.find(m => m.id === matchId);
+      if (!match) return;
+
+      showToast("Consultando IA do Gemini...");
+      
+      const totalRealGols = match.realGolsCasa + match.realGolsFora;
+      const totalRealEsc = match.realEscCasa + match.realEscFora;
+      const totalRealCartoes = match.realCartoesCasa + match.realCartoesFora;
+
+      const prompt = `Você é um especialista em análise estatística de futebol.
+Jogo: ${match.title} (${match.dateTime})
+Status atual: ${match.status}
+Sugestão: ${match.sugestao} (@${match.odd})
+Projeções: Gols: ${match.gols}, Escanteios: ${match.escanteios}, Cartões: ${match.cartoes}
+Estatísticas Reais Lançadas: Placar ${match.realGolsCasa}x${match.realGolsFora} (Total: ${totalRealGols}), Escanteios ${match.realEscCasa}x${match.realEscFora} (Total: ${totalRealEsc}), Cartões ${match.realCartoesCasa}x${match.realCartoesFora} (Total: ${totalRealCartoes}).
+Informações extras: ${match.info}
+
+Forneça um breve resumo tático de até 4 linhas, avaliando se a entrada sugerida possui alto valor tático ou o motivo do resultado obtido.`;
+
+      try {
+        const resultText = await callGeminiApi(prompt);
+        match.iaAnalysis = resultText;
+        saveToLocalStorage();
+        renderCards();
+        showToast("Análise da IA gerada!");
+      } catch (e) {
+        showToast("Erro ao conectar à IA.");
+      }
+    }
+
+    // Comparador de Confronto Direto via IA
+    async function openCompareModal(matchId, event) {
+      if (event) event.stopPropagation();
+      const match = matchesData.find(m => m.id === matchId);
+      if (!match) return;
+
+      modalMatchTitle.textContent = `Comparativo Tático: ${match.title}`;
+      modalBodyContent.textContent = "Solicitando análise comparativa à IA...";
+      compareModal.classList.remove('hidden');
+
+      const prompt = `Faça uma comparação direta sucinta entre as duas equipes da partida "${match.title}".
+Considerando as médias: Gols esperados (${match.gols}), Escanteios (${match.escanteios}), Cartões (${match.cartoes}).
+Dados adicionais: ${match.info}
+
+Apresente em formato limpo:
+1. Ponto Forte do Mandante
+2. Ponto Forte do Visitante
+3. Conclusão para o Mercado de Apostas.`;
+
+      try {
+        const text = await callGeminiApi(prompt);
+        modalBodyContent.innerHTML = `<div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700 leading-relaxed whitespace-pre-wrap">${text}</div>`;
+      } catch (e) {
+        modalBodyContent.textContent = "Erro ao carregar comparação da IA.";
+      }
+    }
+
+    // Análise Geral da Rodada (Visão Global)
+    btnGlobalIaAnalysis.addEventListener('click', async () => {
+      if (matchesData.length === 0) return alert("Nenhuma partida carregada para analisar.");
+
+      globalIaPanel.classList.remove('hidden');
+      globalIaContent.textContent = "Processando visão geral consolidada com o Gemini IA...";
+
+      const summary = matchesData.map(m => {
+        const trg = m.realGolsCasa + m.realGolsFora;
+        const tre = m.realEscCasa + m.realEscFora;
+        return `• ${m.title} [${m.dateTime}] - Status: ${m.status} | Exp: ${m.gols} Gols, ${m.escanteios} Esc | Real: ${m.realGolsCasa}x${m.realGolsFora} (${trg} gols), ${tre} escanteios`;
+      }).join('\n');
+
+      const prompt = `Você é um analista chefe de apostas esportivas. Avalie as seguintes partidas da rodada:
+${summary}
+
+Responda em formato objetivo:
+1. Resumo do desempenho geral dos cards.
+2. Destaques de maior confiabilidade para os jogos pendentes/ao vivo.
+3. Recomendação de gestão de banca para a rodada.`;
+
+      try {
+        const text = await callGeminiApi(prompt);
+        globalIaContent.textContent = text;
+      } catch (e) {
+        globalIaContent.textContent = "Falha ao consultar a IA. Tente novamente mais tarde.";
+      }
+    });
+
+    // Funcionalidade de Exportação de Dados (.TXT e .JSON)
+    exportBtn.addEventListener('click', () => {
+      if (matchesData.length === 0) return alert('Nenhuma partida disponível para exportar.');
+      
+      let txtContent = matchesData.map(m => {
+        return m.rawText || `${m.title} - [${m.dateTime}]\n+2,5: ${m.plus25}\n+1,5: ${m.plus15}\nQuantidade esperada de gols no jogo: ${m.gols}\nMédia de escanteios: ${m.escanteios}\nMédia de cartões: ${m.cartoes}\nInfo: ${m.info}\nSugestão de odd combinada: ${m.odd} — ${m.sugestao}`;
+      }).join('\n\n' + '='.repeat(40) + '\n\n');
+
+      const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `partidas_statscard_${new Date().toISOString().slice(0, 10)}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Arquivo TXT exportado com sucesso!');
+    });
+
+    exportJsonBtn.addEventListener('click', () => {
+      if (matchesData.length === 0) return alert('Nenhuma partida disponível para exportar.');
+
+      const jsonContent = JSON.stringify(matchesData, null, 2);
+      const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `partidas_statscard_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Arquivo JSON exportado com sucesso!');
+    });
+
+    // Limpar todas as partidas ativas
+    clearAllMatchesBtn.addEventListener('click', () => {
+      if (matchesData.length === 0) return alert('Não há partidas para limpar.');
+      
+      if (confirm('Tem certeza de que deseja remover todas as partidas ativas? (O histórico permanente não será apagado)')) {
+        matchesData = [];
+        selectedForMulti.clear();
+        saveToLocalStorage();
+        updateDateTabs();
+        updateMultiBar();
+        renderCards();
+        showToast('Todas as partidas ativas foram removidas.');
+      }
+    });
+
+    // Drag & Drop Upload
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    ['dragleave', 'dragend'].forEach(evt => dropZone.addEventListener(evt, () => dropZone.classList.remove('drag-over')));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length) handleFileSelect(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFileSelect(e.target.files[0]); });
+
+    function handleFileSelect(file) {
+      const reader = new FileReader();
+      reader.onload = (event) => processInputContent(event.target.result);
+      reader.readAsText(file);
+    }
+
+    processBtn.addEventListener('click', () => {
+      const content = rawTextInput.value.trim();
+      if (!content) return alert('Cole um texto ou carregue um arquivo primeiro.');
+      processInputContent(content);
+    });
+
+    function processInputContent(content) {
+      let parsedMatches = [];
+
+      if (content.trim().startsWith('[') || content.trim().startsWith('{')) {
+        try {
+          const jsonObj = JSON.parse(content);
+          const arr = Array.isArray(jsonObj) ? jsonObj : [jsonObj];
+          parsedMatches = arr.map((item, idx) => ({
+            id: item.id || ('id_' + Date.now() + '_' + idx),
+            title: sanitizeText(item.title || "Partida Sem Título"),
+            dateTime: item.dateTime || "",
+            parsedDate: parseDateTimeString(item.dateTime || ""),
+            plus25: sanitizeText(item.plus25 || "N/I"),
+            plus15: sanitizeText(item.plus15 || "N/I"),
+            gols: item.gols || 0,
+            escanteios: item.escanteios || 0,
+            cartoes: item.cartoes || 0,
+            info: sanitizeText(item.info || ""),
+            odd: item.odd || 0,
+            sugestao: sanitizeText(item.sugestao || ""),
+            status: item.status || "pending",
+            realGolsCasa: item.realGolsCasa || 0,
+            realGolsFora: item.realGolsFora || 0,
+            realEscCasa: item.realEscCasa || 0,
+            realEscFora: item.realEscFora || 0,
+            realChutesCasa: item.realChutesCasa || 0,
+            realChutesFora: item.realChutesFora || 0,
+            realCartoesCasa: item.realCartoesCasa || 0,
+            realCartoesFora: item.realCartoesFora || 0,
+            iaAnalysis: item.iaAnalysis || "",
+            stats100: (item.stats100 || []).map(st => ({
+              team: sanitizeText(st.team),
+              lines: (st.lines || []).map(l => sanitizeText(l))
+            })),
+            rawText: item.rawText || ""
+          }));
+        } catch (e) {}
+      }
+
+      if (parsedMatches.length === 0) parsedMatches = parseMatchesTextRobust(content);
+
+      if (parsedMatches.length === 0) {
+        alert('Nenhuma partida válida encontrada no padrão suportado.');
+        return;
+      }
+
+      const shouldAppend = appendModeCheckbox.checked;
+      if (shouldAppend) {
+        const existingKeys = new Set(matchesData.map(m => `${m.title}_${m.dateTime}`));
+        const newUnique = parsedMatches.filter(m => !existingKeys.has(`${m.title}_${m.dateTime}`));
+        matchesData = [...matchesData, ...newUnique];
+        
+        const permKeys = new Set(permanentHistory.map(m => `${m.title}_${m.dateTime}`));
+        const newForPerm = newUnique.filter(m => !permKeys.has(`${m.title}_${m.dateTime}`));
+        permanentHistory = [...permanentHistory, ...newForPerm];
+
+        showToast(`${newUnique.length} nova(s) partida(s) adicionada(s)!`);
+      } else {
+        matchesData = parsedMatches;
+        
+        const permKeys = new Set(permanentHistory.map(m => `${m.title}_${m.dateTime}`));
+        const newForPerm = parsedMatches.filter(m => !permKeys.has(`${m.title}_${m.dateTime}`));
+        permanentHistory = [...permanentHistory, ...newForPerm];
+
+        showToast(`${parsedMatches.length} partida(s) carregada(s)!`);
+      }
+
+      autoUpdateGameStatuses();
+      saveToLocalStorage();
+      updateDateTabs();
+      renderCards();
+      rawTextInput.value = '';
+      inputSection.classList.add('hidden');
+    }
+
+    function parseDateTimeString(dtStr) {
+      if (!dtStr) return new Date(0);
+      try {
+        const [datePart, timePart] = dtStr.split(' - ');
+        const [day, month, year] = datePart.split('/');
+        const [hours, minutes] = timePart.split(':');
+        return new Date(year, month - 1, day, hours, minutes);
+      } catch (e) {
+        return new Date(0);
+      }
+    }
+
+    function parseMatchesTextRobust(rawText) {
+      const matchHeaderRegex = /([^\n]+?\s*x\s*[^\n]+?)\s*-\s*\[(\d{2}\/\d{2}\/\d{4}\s*-\s*\d{2}:\d{2})\]/g;
+      const matches = [];
+      let match;
+      const indices = [];
+
+      while ((match = matchHeaderRegex.exec(rawText)) !== null) {
+        indices.push({ index: match.index, title: sanitizeText(match[1]), dateTime: match[2].trim() });
+      }
+
+      if (indices.length === 0) return [];
+
+      for (let i = 0; i < indices.length; i++) {
+        const start = indices[i].index;
+        const end = (i + 1 < indices.length) ? indices[i + 1].index : rawText.length;
+        const block = rawText.slice(start, end).trim();
+
+        const title = indices[i].title;
+        const dateTime = indices[i].dateTime;
+
+        const p25Match = block.match(/\+2,5:\s*([^\n]+)/);
+        const plus25 = p25Match ? sanitizeText(p25Match[1]) : "N/I";
+
+        const p15Match = block.match(/\+1,5:\s*([^\n]+)/);
+        const plus15 = p15Match ? sanitizeText(p15Match[1]) : "N/I";
+
+        const golsMatch = block.match(/Quantidade esperada de gols no jogo:\s*([\d\.,]+)/);
+        const gols = golsMatch ? parseFloat(golsMatch[1].replace(',', '.')) : 0;
+
+        const escanteiosMatch = block.match(/Média de escanteios:\s*([\d\.,]+)/);
+        const escanteios = escanteiosMatch ? parseFloat(escanteiosMatch[1].replace(',', '.')) : 0;
+
+        const cartoesMatch = block.match(/Média de cartões:\s*([\d\.,]+)/);
+        const cartoes = cartoesMatch ? parseFloat(cartoesMatch[1].replace(',', '.')) : 0;
+
+        const infoMatch = block.match(/Info:\s*([^\n]+)/);
+        const info = infoMatch ? sanitizeText(infoMatch[1]) : "";
+
+        const oddMatch = block.match(/Sugestão de odd combinada:\s*([\d\.,]+)\s*—\s*([^\n]+)/);
+        const odd = oddMatch ? parseFloat(oddMatch[1].replace(',', '.')) : 0;
+        const sugestao = oddMatch ? sanitizeText(oddMatch[2]) : "";
+
+        const stats100Regex = /Em 100% dos jogos do (.*?):\n([\s\S]*?)(?=(Em 100%|Sugestão|$))/g;
+        let stats100List = [];
+        let stMatch;
+
+        while ((stMatch = stats100Regex.exec(block)) !== null) {
+          const teamName = sanitizeText(stMatch[1]);
+          const statsLines = stMatch[2].trim().split('\n').map(l => sanitizeText(l)).filter(Boolean);
+          stats100List.push({ team: teamName, lines: statsLines });
+        }
+
+        matches.push({
+          id: 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+          title,
+          dateTime,
+          parsedDate: parseDateTimeString(dateTime),
+          plus25,
+          plus15,
+          gols,
+          escanteios,
+          cartoes,
+          info,
+          odd,
+          sugestao,
+          status: 'pending',
+          realGolsCasa: 0,
+          realGolsFora: 0,
+          realEscCasa: 0,
+          realEscFora: 0,
+          realChutesCasa: 0,
+          realChutesFora: 0,
+          realCartoesCasa: 0,
+          realCartoesFora: 0,
+          iaAnalysis: "",
+          stats100: stats100List,
+          rawText: block
+        });
+      }
+
+      return matches;
+    }
+
+    // Identificação Automática do Status das Partidas baseado no Horário do Sistema
+    function autoUpdateGameStatuses() {
+      const now = new Date();
+      let changed = false;
+
+      matchesData.forEach(match => {
+        if (match.status === 'green' || match.status === 'red' || match.status === 'void') return;
+
+        const matchTime = new Date(match.parsedDate);
+        if (isNaN(matchTime.getTime()) || matchTime.getTime() === 0) return;
+
+        const diffMinutes = Math.floor((now - matchTime) / (1000 * 60));
+
+        // Se o jogo começou e tem até 115 minutos (90 min + 15 min intervalo + acréscimos)
+        if (diffMinutes >= 0 && diffMinutes <= 115) {
+          if (match.status !== 'live') {
+            match.status = 'live';
+            changed = true;
+          }
+        } else if (diffMinutes > 115) {
+          // Se já se passaram mais de 115 minutos do início e não foi manualmente alterado
+          if (match.status === 'live' || match.status === 'pending') {
+            // Mantém como pendente de resolução final
+            changed = true;
+          }
+        } else {
+          if (match.status !== 'pending') {
+            match.status = 'pending';
+            changed = true;
+          }
+        }
+      });
+
+      if (changed) {
+        saveToLocalStorage();
+      }
+    }
+
+    function updateDashboardStats() {
+      const resolved = matchesData.filter(m => m.status === 'green' || m.status === 'red');
+      const greens = matchesData.filter(m => m.status === 'green');
+
+      let profitUnits = 0;
+      let totalStaked = resolved.length;
+
+      resolved.forEach(m => {
+        if (m.status === 'green') profitUnits += (m.odd > 0 ? m.odd - 1 : 0);
+        if (m.status === 'red') profitUnits -= 1;
+      });
+
+      const winRateVal = totalStaked > 0 ? ((greens.length / totalStaked) * 100).toFixed(1) : "0.0";
+      const roiVal = totalStaked > 0 ? ((profitUnits / totalStaked) * 100).toFixed(1) : "0.0";
+
+      statTotalResolved.textContent = `${resolved.length}`;
+      statWinRate.textContent = `${winRateVal}%`;
+      statProfitLoss.textContent = `${profitUnits >= 0 ? '+' : ''}${profitUnits.toFixed(2)} u`;
+      statProfitLoss.className = `text-lg font-bold ${profitUnits >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+      statRoi.textContent = `${roiVal}%`;
+    }
+
+    function updateDateTabs() {
+      const dates = [...new Set(matchesData.map(m => m.dateTime.split(' - ')[0]).filter(Boolean))];
+      dates.sort((a, b) => {
+        const [dA, mA, yA] = a.split('/');
+        const [dB, mB, yB] = b.split('/');
+        return new Date(yA, mA-1, dA) - new Date(yB, mB-1, dB);
+      });
+
+      dateTabsContainer.innerHTML = `
+        <button data-date="all" class="date-tab ${selectedDateFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'} px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors">
+          Todas as Datas
+        </button>
+      `;
+
+      dates.forEach(d => {
+        const btn = document.createElement('button');
+        btn.setAttribute('data-date', d);
+        btn.className = `date-tab ${selectedDateFilter === d ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'} px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors`;
+        btn.textContent = d;
+        dateTabsContainer.appendChild(btn);
+      });
+
+      document.querySelectorAll('.date-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          selectedDateFilter = tab.getAttribute('data-date');
+          updateDateTabs();
+          renderCards();
+        });
+      });
+    }
+
+    function renderHistoryItems() {
+      historyContainer.innerHTML = '';
+      if (permanentHistory.length === 0) {
+        historyContainer.innerHTML = '<p class="text-slate-500 italic col-span-full">Nenhum registro arquivado no histórico permanente.</p>';
+        return;
+      }
+
+      permanentHistory.forEach(m => {
+        const item = document.createElement('div');
+        item.className = 'bg-slate-900/90 border border-slate-700/80 p-3 rounded-lg flex flex-col justify-between space-y-1.5';
+        
+        let statusTag = '<span class="text-amber-400">⏳ Pendente</span>';
+        if (m.status === 'live') statusTag = '<span class="text-rose-400">● Ao Vivo</span>';
+        if (m.status === 'green') statusTag = '<span class="text-emerald-400">✅ Green</span>';
+        if (m.status === 'red') statusTag = '<span class="text-rose-500">❌ Red</span>';
+        if (m.status === 'void') statusTag = '<span class="text-slate-400">⚪ Anulado</span>';
+
+        item.innerHTML = `
+          <div class="flex justify-between items-center text-[10px] text-slate-400">
+            <span>${m.dateTime}</span>
+            <span>${statusTag}</span>
+          </div>
+          <span class="font-bold text-white text-xs">${m.title}</span>
+          <div class="text-[11px] text-slate-300 mt-1">Placar: ${m.realGolsCasa}x${m.realGolsFora} | Esc: ${m.realEscCasa}x${m.realEscFora}</div>
+        `;
+        historyContainer.appendChild(item);
+      });
+    }
+
+    clearHistoryPermBtn.addEventListener('click', () => {
+      if (confirm('Deseja apagar permanentemente todo o histórico arquivado?')) {
+        permanentHistory = [];
+        saveToLocalStorage();
+        showToast('Histórico permanente apagado.');
+      }
+    });
+
+    btnQuickHighConf.addEventListener('click', () => {
+      filterPlus25.value = 'Alta';
+      filterPlus15.value = 'Alta';
+      renderCards();
+      showToast('Filtro: Alta Confiança aplicado');
+    });
+
+    btnQuickSuperOdds.addEventListener('click', () => {
+      filterMinOdd.value = '2.00';
+      renderCards();
+      showToast('Filtro: Super Odds (≥ 2.00) aplicado');
+    });
+
+    btnQuickCorners.addEventListener('click', () => {
+      filterMinEscanteios.value = '10.0';
+      renderCards();
+      showToast('Filtro: Over Escanteios (≥ 10.0) aplicado');
+    });
+
+    btnFilterStatusGreen.addEventListener('click', () => {
+      filterStatus.value = 'green';
+      renderCards();
+      showToast('Filtro: Apenas Greens aplicado');
+    });
+
+    function getFilteredMatches() {
+      const query = searchInput.value.toLowerCase().trim();
+      const p25Val = filterPlus25.value;
+      const p15Val = filterPlus15.value;
+      const statusVal = filterStatus.value;
+      const minGols = parseFloat(filterMinGols.value) || 0;
+      const minEsc = parseFloat(filterMinEscanteios.value) || 0;
+      const minOddVal = parseFloat(filterMinOdd.value) || 0;
+
+      let activeCount = 0;
+      if (p25Val) activeCount++;
+      if (p15Val) activeCount++;
+      if (statusVal) activeCount++;
+      if (minGols > 0) activeCount++;
+      if (minEsc > 0) activeCount++;
+      if (minOddVal > 0) activeCount++;
+
+      if (activeCount > 0) {
+        activeFiltersBadge.textContent = activeCount;
+        activeFiltersBadge.classList.remove('hidden');
+      } else {
+        activeFiltersBadge.classList.add('hidden');
+      }
+
+      let filtered = matchesData.filter(m => {
+        if (selectedDateFilter !== 'all') {
+          const matchDate = m.dateTime.split(' - ')[0];
+          if (matchDate !== selectedDateFilter) return false;
+        }
+
+        const matchesQuery = !query || 
+          m.title.toLowerCase().includes(query) ||
+          m.sugestao.toLowerCase().includes(query) ||
+          m.info.toLowerCase().includes(query);
+
+        const matchesP25 = !p25Val || m.plus25.toLowerCase() === p25Val.toLowerCase();
+        const matchesP15 = !p15Val || m.plus15.toLowerCase() === p15Val.toLowerCase();
+        const matchesStatus = !statusVal || m.status === statusVal;
+        const matchesGols = m.gols >= minGols;
+        const matchesEsc = m.escanteios >= minEsc;
+        const matchesOdd = m.odd >= minOddVal;
+
+        return matchesQuery && matchesP25 && matchesP15 && matchesStatus && matchesGols && matchesEsc && matchesOdd;
+      });
+
+      const sortType = sortBy.value;
+      if (sortType === 'time-asc') filtered.sort((a, b) => new Date(a.parsedDate) - new Date(b.parsedDate));
+      if (sortType === 'time-desc') filtered.sort((a, b) => new Date(b.parsedDate) - new Date(a.parsedDate));
+      if (sortType === 'odd-desc') filtered.sort((a, b) => b.odd - a.odd);
+      if (sortType === 'odd-asc') filtered.sort((a, b) => a.odd - b.odd);
+      if (sortType === 'gols-desc') filtered.sort((a, b) => b.gols - a.gols);
+      if (sortType === 'escanteios-desc') filtered.sort((a, b) => b.escanteios - a.escanteios);
+
+      return filtered;
+    }
+
+    function updateMatchRealData(id, field, value) {
+      const match = matchesData.find(m => m.id === id);
+      if (match) {
+        match[field] = parseFloat(value) || 0;
+        const permMatch = permanentHistory.find(m => m.id === id);
+        if (permMatch) permMatch[field] = match[field];
+        saveToLocalStorage();
+        renderCards();
+      }
+    }
+
+    function changeMatchStatus(id, newStatus, event) {
+      if (event) event.stopPropagation();
+      const match = matchesData.find(m => m.id === id);
+      if (match) {
+        match.status = newStatus;
+        const permMatch = permanentHistory.find(m => m.id === id);
+        if (permMatch) permMatch.status = newStatus;
+        saveToLocalStorage();
+        renderCards();
+      }
+    }
+
+    function deleteCard(id, event) {
+      if (event) event.stopPropagation();
+      if (confirm('Deseja remover esta partida dos cards principais? (O histórico arquivado permanecerá)')) {
+        matchesData = matchesData.filter(m => m.id !== id);
+        selectedForMulti.delete(id);
+        saveToLocalStorage();
+        updateDateTabs();
+        updateMultiBar();
+        renderCards();
+        showToast('Partida removida dos cards.');
+      }
+    }
+
+    function copyBet(sugestao, odd, event) {
+      if (event) event.stopPropagation();
+      const textToCopy = `${sugestao} (Odd: @${odd.toFixed(2)})`;
+      const tempInput = document.createElement('textarea');
+      tempInput.value = textToCopy;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempInput);
+      showToast('Aposta copiada!');
+    }
+
+    // Gestão da Múltipla
+    function toggleMultiSelect(id, event) {
+      if (event) event.stopPropagation();
+      if (selectedForMulti.has(id)) {
+        selectedForMulti.delete(id);
+      } else {
+        selectedForMulti.add(id);
+      }
+      updateMultiBar();
+      renderCards();
+    }
+
+    function updateMultiBar() {
+      if (selectedForMulti.size === 0) {
+        multiBetBar.classList.add('translate-y-full');
+        return;
+      }
+
+      multiBetBar.classList.remove('translate-y-full');
+      multiCount.textContent = `${selectedForMulti.size} jogo(s) selecionado(s)`;
+
+      let totalOdd = 1.0;
+      selectedForMulti.forEach(id => {
+        const match = matchesData.find(m => m.id === id);
+        if (match && match.odd > 0) {
+          totalOdd *= match.odd;
+        }
+      });
+
+      multiOdd.textContent = `@${totalOdd.toFixed(2)}`;
+    }
+
+    clearMultiBtn.addEventListener('click', () => {
+      selectedForMulti.clear();
+      updateMultiBar();
+      renderCards();
+    });
+
+    copyMultiBtn.addEventListener('click', () => {
+      if (selectedForMulti.size === 0) return;
+      let text = "🔥 *APOSTA MULTIPLA/COMBINADA STATSCARD* 🔥\n\n";
+      let totalOdd = 1.0;
+
+      selectedForMulti.forEach(id => {
+        const match = matchesData.find(m => m.id === id);
+        if (match) {
+          text += `⚽ ${match.title} (${match.dateTime})\n📌 Entrada: ${match.sugestao} (@${match.odd.toFixed(2)})\n\n`;
+          totalOdd *= match.odd;
+        }
+      });
+
+      text += `💰 *Odd Total:* @${totalOdd.toFixed(2)}`;
+
+      const tempInput = document.createElement('textarea');
+      tempInput.value = text;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempInput);
+      showToast('Múltipla copiada para a área de transferência!');
+    });
+
+    // Gerador Visual de Bilhete em Canvas
+    generateMultiTicketBtn.addEventListener('click', () => {
+      if (selectedForMulti.size === 0) return;
+
+      const ctx = ticketCanvas.getContext('2d');
+      const w = ticketCanvas.width;
+      const h = ticketCanvas.height;
+
+      // Fundo
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, w, h);
+
+      // Cabeçalho Bilhete
+      ctx.fillStyle = '#4f46e5';
+      ctx.fillRect(0, 0, w, 100);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillText('STATSCARD - BILHETE VIP', 30, 60);
+
+      let yPos = 140;
+      let totalOdd = 1.0;
+
+      selectedForMulti.forEach(id => {
+        const match = matchesData.find(m => m.id === id);
+        if (match && yPos < h - 120) {
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(20, yPos, w - 40, 90);
+
+          ctx.fillStyle = '#818cf8';
+          ctx.font = 'bold 16px sans-serif';
+          ctx.fillText(match.title, 35, yPos + 30);
+
+          ctx.fillStyle = '#e2e8f0';
+          ctx.font = '14px sans-serif';
+          ctx.fillText(match.sugestao, 35, yPos + 60);
+
+          ctx.fillStyle = '#10b981';
+          ctx.font = 'bold 16px sans-serif';
+          ctx.fillText(`@${match.odd.toFixed(2)}`, w - 100, yPos + 45);
+
+          totalOdd *= match.odd;
+          yPos += 105;
+        }
+      });
+
+      // Rodapé Bilhete
+      ctx.fillStyle = '#059669';
+      ctx.fillRect(20, h - 90, w - 40, 60);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText('ODD TOTAL:', 40, h - 52);
+      ctx.fillText(`@${totalOdd.toFixed(2)}`, w - 140, h - 52);
+
+      ticketModal.classList.remove('hidden');
+    });
+
+    downloadTicketBtn.addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = `bilhete_statscard_${Date.now()}.png`;
+      link.href = ticketCanvas.toDataURL('image/png');
+      link.click();
+      showToast('Imagem do bilhete baixada!');
+    });
+
+    // Atualização em Tempo Real do Horário
+    function updateGameStatusBadges() {
+      autoUpdateGameStatuses();
+      document.querySelectorAll('[data-match-id]').forEach(card => {
+        const id = card.getAttribute('data-match-id');
+        const match = matchesData.find(m => m.id === id);
+        if (match) {
+           const badgeContainer = card.querySelector('.dynamic-badge');
+           if (badgeContainer) {
+              const htmlBadge = getGameStatusBadgeHtml(match.parsedDate, match.status);
+              if (badgeContainer.innerHTML !== htmlBadge) badgeContainer.innerHTML = htmlBadge;
+           }
+        }
+      });
+    }
+    setInterval(updateGameStatusBadges, 60000);
+
+    function getGameStatusBadgeHtml(parsedDate, status) {
+      if (status === 'live') {
+        return `<span class="badge-pulse bg-rose-500/20 text-rose-400 border border-rose-500/40 text-[10px] font-extrabold px-2 py-0.5 rounded flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> ● Ao Vivo
+        </span>`;
+      }
+      if (!parsedDate || isNaN(new Date(parsedDate).getTime())) return '';
+      const now = new Date();
+      const matchTime = new Date(parsedDate);
+      const diffMinutes = Math.floor((matchTime - now) / (1000 * 60));
+
+      if (diffMinutes > 0 && diffMinutes <= 180) {
+        const hrs = Math.floor(diffMinutes / 60);
+        const mins = diffMinutes % 60;
+        const timeText = hrs > 0 ? `${hrs}h ${mins}m` : `${mins} min`;
+        return `<span class="badge-pulse bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] font-extrabold px-2 py-0.5 rounded flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Inicia em ${timeText}
+        </span>`;
+      }
+      return '';
+    }
+
+    function renderCards() {
+      const filtered = getFilteredMatches();
+      cardsContainer.innerHTML = '';
+
+      resultsCount.textContent = `Exibindo ${filtered.length} de ${matchesData.length} partidas`;
+
+      if (filtered.length === 0) {
+        emptyState.classList.remove('hidden');
+        return;
+      } else {
+        emptyState.classList.add('hidden');
+      }
+
+      filtered.forEach(m => {
+        const isSelectedMulti = selectedForMulti.has(m.id);
+        const statusBadge = getGameStatusBadgeHtml(m.parsedDate, m.status);
+
+        const totalRealGols = m.realGolsCasa + m.realGolsFora;
+        const totalRealEsc = m.realEscCasa + m.realEscFora;
+        const totalRealCartoes = m.realCartoesCasa + m.realCartoesFora;
+
+        const golsMet = m.gols > 0 && totalRealGols >= m.gols;
+        const escMet = m.escanteios > 0 && totalRealEsc >= m.escanteios;
+        const cartMet = m.cartoes > 0 && totalRealCartoes >= m.cartoes;
+
+        const isFinished = m.status === 'green' || m.status === 'red' || m.status === 'void';
+        const isLiveOrFinished = m.status === 'live' || isFinished;
+
+        let cardBorderColor = 'border-slate-700 hover:border-slate-600';
+        if (m.status === 'live') cardBorderColor = 'border-rose-500/70 bg-slate-800/90';
+        if (m.status === 'green') cardBorderColor = 'border-emerald-500/80 bg-emerald-950/10';
+        if (m.status === 'red') cardBorderColor = 'border-rose-500/80 bg-rose-950/10';
+        if (m.status === 'void') cardBorderColor = 'border-slate-500/80 bg-slate-800/40';
+
+        const dimClass = isFinished ? 'dimmed-card' : '';
+
+        const card = document.createElement('div');
+        card.setAttribute('data-match-id', m.id);
+        card.className = `bg-slate-800 border ${isSelectedMulti ? 'border-indigo-500 ring-2 ring-indigo-500/50' : cardBorderColor} rounded-xl overflow-hidden shadow-lg flex flex-col relative group ${dimClass}`;
+        
+        const getBadgeBg = (val) => {
+          if (val.toLowerCase() === 'alta') return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+          if (val.toLowerCase() === 'média' || val.toLowerCase() === 'media') return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+          return 'bg-slate-700 text-slate-300 border-slate-600';
+        };
+
+        const getOddBadgeColor = (odd) => {
+          if (odd < 1.50) return 'bg-emerald-600/90 text-white border-emerald-500';
+          if (odd <= 1.99) return 'bg-indigo-600/90 text-white border-indigo-500';
+          return 'bg-purple-600/90 text-white border-purple-400 font-extrabold';
+        };
+
+        const statBoxStyle = (isHit) => {
+          if (!isLiveOrFinished) return 'bg-slate-800/60 border-slate-700/50 text-slate-300';
+          return isHit 
+            ? 'bg-emerald-950/50 border-emerald-500/60 text-emerald-300 shadow-sm shadow-emerald-900/30' 
+            : 'bg-rose-950/50 border-rose-500/60 text-rose-300 shadow-sm shadow-rose-900/30';
+        };
+
+        card.innerHTML = `
+          <!-- Cabeçalho -->
+          <div class="p-4 bg-slate-800/90 border-b border-slate-700/60 flex flex-col justify-between gap-2">
+            <div class="flex justify-between items-start">
+              <div class="flex items-center gap-2">
+                <input type="checkbox" ${isSelectedMulti ? 'checked' : ''} class="multi-checkbox rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer" title="Selecionar para Múltipla" />
+                
+                <span class="text-xs font-semibold text-indigo-400 flex items-center gap-1 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-800/50">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                  ${m.dateTime}
+                </span>
+
+                <div class="dynamic-badge">${statusBadge}</div>
+              </div>
+
+              <div class="flex items-center gap-2 relative z-20">
+                <select class="status-select bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-300 focus:outline-none cursor-pointer">
+                  <option value="pending" ${m.status === 'pending' ? 'selected' : ''}>⏳ Pendente</option>
+                  <option value="live" ${m.status === 'live' ? 'selected' : ''}>● Ao Vivo</option>
+                  <option value="green" ${m.status === 'green' ? 'selected' : ''}>✅ Green</option>
+                  <option value="red" ${m.status === 'red' ? 'selected' : ''}>❌ Red</option>
+                  <option value="void" ${m.status === 'void' ? 'selected' : ''}>⚪ Anulado</option>
+                </select>
+
+                <button title="Remover Partida" class="delete-btn text-slate-500 hover:text-rose-400 p-1 transition-colors text-xs">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between mt-1 relative z-20">
+              <h3 class="text-base font-bold text-white tracking-wide">${m.title}</h3>
+              ${isFinished ? `<span class="bg-slate-900 text-white font-black px-2 py-1 rounded-md border border-slate-600 shadow text-[10px]">FINALIZADO: ${m.realGolsCasa} x ${m.realGolsFora}</span>` : ''}
+              ${!isFinished ? `
+              <div class="flex gap-1 text-[11px]">
+                <span class="px-1.5 py-0.5 rounded border ${getBadgeBg(m.plus15)} font-medium">+1.5: ${m.plus15}</span>
+                <span class="px-1.5 py-0.5 rounded border ${getBadgeBg(m.plus25)} font-medium">+2.5: ${m.plus25}</span>
+              </div>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- Placar e Estatísticas em Tempo Real -->
+          ${isLiveOrFinished ? `
+          <div class="px-4 py-2 bg-slate-950/60 border-b border-slate-700/50 flex items-center justify-around text-xs">
+            <div class="text-center">
+              <span class="block text-[10px] text-slate-400 font-semibold uppercase">Placar</span>
+              <span class="text-base font-black text-amber-400">${m.realGolsCasa} - ${m.realGolsFora}</span>
+            </div>
+            <div class="text-center">
+              <span class="block text-[10px] text-slate-400 font-semibold uppercase">Escanteios</span>
+              <span class="text-xs font-bold text-cyan-300">🚩 ${m.realEscCasa} x ${m.realEscFora}</span>
+            </div>
+            <div class="text-center">
+              <span class="block text-[10px] text-slate-400 font-semibold uppercase">Chutes Alvo</span>
+              <span class="text-xs font-bold text-emerald-300">🎯 ${m.realChutesCasa} x ${m.realChutesFora}</span>
+            </div>
+            <div class="text-center">
+              <span class="block text-[10px] text-slate-400 font-semibold uppercase">Cartões</span>
+              <span class="text-xs font-bold text-rose-300">🟨 ${m.realCartoesCasa} x ${m.realCartoesFora}</span>
+            </div>
+          </div>
+          ` : ''}
+
+          <!-- Métricas Resumidas -->
+          <div class="p-3 grid grid-cols-3 gap-2 bg-slate-900/40 text-center border-b border-slate-700/40 relative z-20">
+            <div class="p-2 rounded-lg border ${statBoxStyle(golsMet)}">
+              <span class="block text-[10px] opacity-80 uppercase font-semibold">Gols Exp.</span>
+              <span class="text-sm font-bold">${m.gols}</span>
+              ${isLiveOrFinished ? `<span class="block text-[9px] font-extrabold mt-0.5">${golsMet ? '✅ ' + totalRealGols : '❌ ' + totalRealGols}</span>` : ''}
+            </div>
+            <div class="p-2 rounded-lg border ${statBoxStyle(escMet)}">
+              <span class="block text-[10px] opacity-80 uppercase font-semibold">Escanteios</span>
+              <span class="text-sm font-bold">${m.escanteios}</span>
+              ${isLiveOrFinished ? `<span class="block text-[9px] font-extrabold mt-0.5">${escMet ? '✅ ' + totalRealEsc : '❌ ' + totalRealEsc}</span>` : ''}
+            </div>
+            <div class="p-2 rounded-lg border ${statBoxStyle(cartMet)}">
+              <span class="block text-[10px] opacity-80 uppercase font-semibold">Cartões</span>
+              <span class="text-sm font-bold">${m.cartoes}</span>
+              ${isLiveOrFinished ? `<span class="block text-[9px] font-extrabold mt-0.5">${cartMet ? '✅ ' + totalRealCartoes : '❌ ' + totalRealCartoes}</span>` : ''}
+            </div>
+          </div>
+
+          <!-- Sugestão -->
+          ${m.sugestao ? `
+          <div class="p-3 bg-indigo-950/30 border-b border-indigo-900/30 flex items-center justify-between gap-2">
+            <div class="text-xs text-indigo-200 flex-1">
+              <span class="font-bold text-indigo-400 block text-[10px] uppercase tracking-wider">Sugestão</span>
+              ${m.sugestao}
+            </div>
+            <div class="flex items-center gap-1.5 relative z-20">
+              <div class="${getOddBadgeColor(m.odd)} border px-2.5 py-1 rounded-lg text-sm font-extrabold shadow">
+                @${m.odd.toFixed(2)}
+              </div>
+              <button title="Copiar Aposta" class="copy-bet-btn bg-slate-700 hover:bg-slate-600 text-slate-200 p-1.5 rounded-lg text-xs transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+              </button>
+            </div>
+          </div>
+          ` : ''}
+
+          <!-- Botões de Ação do Card -->
+          <div class="card-trigger-area px-4 py-2 bg-slate-800/80 text-xs text-slate-400 flex items-center justify-between gap-2 relative z-20 cursor-pointer hover:bg-slate-700/50 transition-colors">
+            <div class="flex items-center gap-2">
+              <button class="compare-btn text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 hover:underline">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                Comparar
+              </button>
+              <button class="ia-single-btn text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-950/40 px-2 py-1 rounded border border-emerald-800/50 hover:border-emerald-500 transition-colors">
+                <span>✨ IA</span>
+              </button>
+            </div>
+            <div class="flex items-center gap-1 text-slate-400 hover:text-indigo-300 pointer-events-none">
+              <span class="expand-text font-medium">Detalhes</span>
+              <svg class="w-4 h-4 transform transition-transform duration-200 expand-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+          </div>
+
+          <!-- Conteúdo Expansível Isolado -->
+          <div class="expanded-content hidden p-4 bg-slate-900/90 border-t border-slate-700 space-y-4 text-xs text-slate-300 cursor-default">
+            
+            ${m.iaAnalysis ? `
+              <div class="p-3 bg-emerald-950/40 border border-emerald-500/40 rounded-lg text-emerald-200 relative z-20">
+                <span class="font-bold text-emerald-400 block mb-1">🤖 Análise da IA Gemini:</span>
+                <p class="leading-relaxed whitespace-pre-wrap text-slate-200">${m.iaAnalysis}</p>
+              </div>
+            ` : ''}
+
+            <!-- Painel para Lançamento Rápido -->
+            <div class="p-3 bg-slate-800/90 rounded-lg border border-slate-700/80 space-y-2 relative z-20">
+              <span class="font-bold text-indigo-300 block text-[11px] uppercase tracking-wider">Lançar Estatísticas Reais</span>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
+                <div>
+                  <label class="block text-slate-400">Gols (A x B)</label>
+                  <div class="flex gap-1 mt-0.5">
+                    <input type="number" min="0" value="${m.realGolsCasa}" data-field="realGolsCasa" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
+                    <input type="number" min="0" value="${m.realGolsFora}" data-field="realGolsFora" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-slate-400">Escanteios (A x B)</label>
+                  <div class="flex gap-1 mt-0.5">
+                    <input type="number" min="0" value="${m.realEscCasa}" data-field="realEscCasa" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
+                    <input type="number" min="0" value="${m.realEscFora}" data-field="realEscFora" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-slate-400">Chutes Alvo (A x B)</label>
+                  <div class="flex gap-1 mt-0.5">
+                    <input type="number" min="0" value="${m.realChutesCasa}" data-field="realChutesCasa" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
+                    <input type="number" min="0" value="${m.realChutesFora}" data-field="realChutesFora" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-slate-400">Cartões (A x B)</label>
+                  <div class="flex gap-1 mt-0.5">
+                    <input type="number" min="0" value="${m.realCartoesCasa}" data-field="realCartoesCasa" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
+                    <input type="number" min="0" value="${m.realCartoesFora}" data-field="realCartoesFora" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            ${m.info ? `
+              <div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                <span class="font-semibold text-indigo-300 block mb-1">Informações Adicionais:</span>
+                <p class="leading-relaxed text-slate-300">${m.info}</p>
+              </div>
+            ` : ''}
+
+            ${m.stats100.length > 0 ? `
+              <div class="space-y-3 pt-1">
+                <span class="font-bold text-slate-200 block border-b border-slate-700 pb-1">
+                  Estatísticas de 100% dos jogos:
+                </span>
+                ${m.stats100.map(st => `
+                  <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700/80">
+                    <span class="font-semibold text-amber-400 block mb-1.5">${st.team}</span>
+                    <ul class="space-y-1 list-disc list-inside text-slate-300">
+                      ${st.lines.map(line => `<li>${line}</li>`).join('')}
+                    </ul>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+        `;
+
+        // Atribuição de Eventos
+        card.querySelector('.delete-btn').addEventListener('click', (e) => deleteCard(m.id, e));
+        card.querySelector('.compare-btn').addEventListener('click', (e) => openCompareModal(m.id, e));
+        card.querySelector('.ia-single-btn').addEventListener('click', (e) => analyzeSingleMatchIA(m.id, e));
+        
+        const statusSelect = card.querySelector('.status-select');
+        statusSelect.addEventListener('change', (e) => changeMatchStatus(m.id, e.target.value, e));
+        statusSelect.addEventListener('click', (e) => e.stopPropagation());
+
+        card.querySelectorAll('.real-input').forEach(inp => {
+          inp.addEventListener('change', (e) => updateMatchRealData(m.id, e.target.dataset.field, e.target.value));
+          inp.addEventListener('click', (e) => e.stopPropagation());
+        });
+
+        const copyBtn = card.querySelector('.copy-bet-btn');
+        if (copyBtn) copyBtn.addEventListener('click', (e) => copyBet(m.sugestao, m.odd, e));
+
+        const checkbox = card.querySelector('.multi-checkbox');
+        checkbox.addEventListener('click', (e) => toggleMultiSelect(m.id, e));
+
+        // Expansão estritamente restrita à barra de gatilho do card (Evitando expansões indesejadas)
+        const triggerArea = card.querySelector('.card-trigger-area');
+        triggerArea.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const content = card.querySelector('.expanded-content');
+          const icon = card.querySelector('.expand-icon');
+
+          const isHidden = content.classList.contains('hidden');
+          if (isHidden) {
+            content.classList.remove('hidden');
+            icon.classList.add('rotate-180');
+          } else {
+            content.classList.add('hidden');
+            icon.classList.remove('rotate-180');
+          }
+        });
+
+        cardsContainer.appendChild(card);
+      });
+    }
+
+    window.onload = function() {
+      if (matchesData.length === 0 && permanentHistory.length === 0) {
+        matchesData = parseMatchesTextRobust(sampleText);
+        permanentHistory = [...matchesData];
+      }
+      autoUpdateGameStatuses();
+      saveToLocalStorage();
+      updateDashboardStats();
+      updateDateTabs();
+      renderHistoryItems();
+      renderCards();
+    };
+  </script>
+</body>
+</html>
