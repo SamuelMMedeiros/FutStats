@@ -1,0 +1,10 @@
+{
+  "name": "StatsCard - Analisador Tático e IA",
+  "short_name": "StatsCard",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e293b",
+  "description": "Análise local de partidas, previsões e histórico esportivo.",
+  "icons": []
+}
