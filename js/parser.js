@@ -3,7 +3,7 @@
   'use strict';
   const core = global.FutStatsCore;
   const storage = global.FutStatsStorage;
-  function toNumber(value, fallback = 0) { return core.number(value, fallback); }
+  function toNumber(value, fallback = null) { return core.number(value, fallback); }
   function baseMatch(input, rawText = '') {
     const match = { ...input, rawText, status: input.status || 'pending', durationMinutes: input.durationMinutes || 115 };
     match.id = core.stableMatchId(match);
@@ -51,11 +51,11 @@
         title, dateTime,
         plus25: core.sanitizeText(capture(block, /\+2[,.]5\s*:\s*([^\n]+)/i, 'N/I')),
         plus15: core.sanitizeText(capture(block, /\+1[,.]5\s*:\s*([^\n]+)/i, 'N/I')),
-        gols: toNumber(capture(block, /Quantidade\s+esperada\s+de\s+gols[^:]*:\s*([\d,.]+)/i, 0)),
-        escanteios: toNumber(capture(block, /M[ée]dia\s+de\s+escanteios\s*:\s*([\d,.]+)/i, 0)),
-        cartoes: toNumber(capture(block, /M[ée]dia\s+de\s+cart[õo]es\s*:\s*([\d,.]+)/i, 0)),
+        gols: toNumber(capture(block, /Quantidade\s+esperada\s+de\s+gols[^:]*:\s*([\d,.]+)/i, null), null),
+        escanteios: toNumber(capture(block, /M[ée]dia\s+de\s+escanteios\s*:\s*([\d,.]+)/i, null), null),
+        cartoes: toNumber(capture(block, /M[ée]dia\s+de\s+cart[õo]es\s*:\s*([\d,.]+)/i, null), null),
         info: core.sanitizeText(capture(block, /Info\s*:\s*([^\n]+)/i, '')),
-        odd: toNumber(capture(block, /Sugest[ãa]o\s+de\s+odd[^:]*:\s*([\d,.]+)/i, 0)),
+        odd: toNumber(capture(block, /Sugest[ãa]o\s+de\s+odd[^:]*:\s*([\d,.]+)/i, null), null),
         sugestao: core.sanitizeText(capture(block, /Sugest[ãa]o\s+de\s+odd[^—-]*[—-]\s*([^\n]+)/i, '')),
         prediction: { market, line, confidence: capture(block, /Confian[çc]a\s*:\s*([^\n]+)/i, '') },
         stats100: [], rawText: block

@@ -84,11 +84,15 @@
 
   function getResult(match) {
     const r = match?.result || {};
+    const cornersHome = number(match?.realEscCasa, null);
+    const cornersAway = number(match?.realEscFora, null);
+    const cardsHome = number(match?.realCartoesCasa, null);
+    const cardsAway = number(match?.realCartoesFora, null);
     return {
       homeGoals: number(r.homeGoals ?? match?.realGolsCasa, null),
       awayGoals: number(r.awayGoals ?? match?.realGolsFora, null),
-      corners: number(r.corners ?? ((number(match?.realEscCasa, 0) || 0) + (number(match?.realEscFora, 0) || 0)), null),
-      cards: number(r.cards ?? ((number(match?.realCartoesCasa, 0) || 0) + (number(match?.realCartoesFora, 0) || 0)), null)
+      corners: r.corners !== undefined ? number(r.corners, null) : (cornersHome === null || cornersAway === null ? null : cornersHome + cornersAway),
+      cards: r.cards !== undefined ? number(r.cards, null) : (cardsHome === null || cardsAway === null ? null : cardsHome + cardsAway)
     };
   }
 

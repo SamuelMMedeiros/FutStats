@@ -67,6 +67,22 @@
     </div>
   </div>
 
+  <!-- Modal individual de detalhes da partida -->
+  <div id="match-details-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="match-details-title">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="p-4 bg-slate-800/90 border-b border-slate-700 flex justify-between items-center">
+        <div>
+          <h3 id="match-details-title" class="text-base font-bold text-white">Detalhes da partida</h3>
+          <p id="match-details-subtitle" class="text-xs text-slate-400 mt-1"></p>
+        </div>
+        <button id="close-match-details-btn" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-700 transition-colors" aria-label="Fechar detalhes">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div id="match-details-body" class="p-5 overflow-y-auto space-y-4 flex-1 text-xs text-slate-300"></div>
+    </div>
+  </div>
+
   <!-- Modal do Gerador de Imagem do Bilhete -->
   <div id="ticket-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 hidden">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md flex flex-col shadow-2xl overflow-hidden p-5 space-y-4">
@@ -498,6 +514,12 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
     const modalMatchTitle = document.getElementById('modal-match-title');
     const modalBodyContent = document.getElementById('modal-body-content');
 
+    const matchDetailsModal = document.getElementById('match-details-modal');
+    const closeMatchDetailsBtn = document.getElementById('close-match-details-btn');
+    const matchDetailsTitle = document.getElementById('match-details-title');
+    const matchDetailsSubtitle = document.getElementById('match-details-subtitle');
+    const matchDetailsBody = document.getElementById('match-details-body');
+
     const ticketModal = document.getElementById('ticket-modal');
     const closeTicketModalBtn = document.getElementById('close-ticket-modal-btn');
     const downloadTicketBtn = document.getElementById('download-ticket-btn');
@@ -539,6 +561,149 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
       setTimeout(() => toast.classList.add('opacity-0', 'pointer-events-none'), 2500);
     }
 
+    function isValidValue(value) {
+      if (value === undefined || value === null || value === '') return false;
+      if (typeof value === 'string' && ['undefined', 'null', 'nan'].includes(value.trim().toLowerCase())) return false;
+      return !(typeof value === 'number' && !Number.isFinite(value));
+    }
+
+    function toValidNumber(value) {
+      const parsed = core.number(value, null);
+      return parsed === null || !Number.isFinite(parsed) ? null : parsed;
+    }
+
+    function formatNumber(value, digits = 2) {
+      const parsed = toValidNumber(value);
+      return parsed === null ? '' : parsed.toLocaleString('pt-BR', { maximumFractionDigits: digits });
+    }
+
+    function validText(value) { return isValidValue(value) ? String(value).trim() : ''; }
+    function validMetric(value) { return toValidNumber(value) !== null; }
+    function sumValid(a, b) { const left = toValidNumber(a); const right = toValidNumber(b); return left === null || right === null ? null : left + right; }
+
+    function normalizeAIResponse(response) {
+      let value = response;
+      if (value && typeof value === 'object' && value.text !== undefined) value = value.text;
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        const candidate = trimmed.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '').trim();
+        try { value = JSON.parse(candidate); } catch { return { summary: trimmed }; }
+      }
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+      const normalized = {};
+      const fields = ['summary', 'recentForm', 'liveStatus', 'statistics', 'importantPoints', 'observations'];
+      fields.forEach(field => {
+        const raw = value[field];
+        if (Array.isArray(raw)) {
+          const list = raw.map(item => {
+            if (item && typeof item === 'object') return validText(item.text || item.label || item.value || item.name);
+            return validText(item);
+          }).filter(item => item && item !== '[object Object]');
+          if (list.length) normalized[field] = list;
+        } else if (isValidValue(raw) && typeof raw !== 'object') {
+          normalized[field] = String(raw).trim();
+        }
+      });
+      return normalized;
+    }
+
+    function renderAIAnalysis(container, response) {
+      container.replaceChildren();
+      const data = normalizeAIResponse(response);
+      const labels = { summary: 'Resumo', recentForm: 'Forma recente', liveStatus: 'Situação atual', statistics: 'Estatísticas relevantes', importantPoints: 'Pontos importantes', observations: 'Observações' };
+      Object.entries(labels).forEach(([key, label]) => {
+        const value = data[key];
+        if (!isValidValue(value) || (Array.isArray(value) && value.length === 0)) return;
+        const section = document.createElement('div');
+        section.className = 'p-3 bg-emerald-950/40 border border-emerald-500/40 rounded-lg text-emerald-200';
+        const heading = document.createElement('span');
+        heading.className = 'font-bold text-emerald-400 block mb-1';
+        heading.textContent = label;
+        const content = document.createElement('p');
+        content.className = 'leading-relaxed whitespace-pre-wrap text-slate-200';
+        content.textContent = Array.isArray(value) ? value.join('\\n') : String(value);
+        section.append(heading, content);
+        container.appendChild(section);
+      });
+      if (!container.childElementCount) {
+        const empty = document.createElement('p');
+        empty.className = 'text-slate-400 italic';
+        empty.textContent = 'Análise adicional indisponível no momento.';
+        container.appendChild(empty);
+      }
+    }
+
+    function createDetailSection(title, rows) {
+      const validRows = rows.filter(([, value]) => isValidValue(value));
+      if (!validRows.length) return null;
+      const section = document.createElement('div');
+      section.className = 'p-3 bg-slate-800/90 rounded-lg border border-slate-700/80 space-y-2';
+      const heading = document.createElement('span');
+      heading.className = 'font-bold text-indigo-300 block text-[11px] uppercase tracking-wider';
+      heading.textContent = title;
+      section.appendChild(heading);
+      validRows.forEach(([label, value]) => {
+        const row = document.createElement('div');
+        row.className = 'flex justify-between gap-4 border-b border-slate-700/60 last:border-0 pb-1 last:pb-0';
+        const key = document.createElement('span'); key.className = 'text-slate-400'; key.textContent = label;
+        const val = document.createElement('span'); val.className = 'text-slate-200 text-right'; val.textContent = String(value);
+        row.append(key, val); section.appendChild(row);
+      });
+      return section;
+    }
+
+    function getMatchDetails(matchId) { return matchesData.find(match => match.id === matchId) || permanentHistory.find(match => match.id === matchId) || null; }
+
+    function renderMatchModal(match) {
+      if (!match) return;
+      matchDetailsTitle.textContent = validText(match.title) || 'Detalhes da partida';
+      matchDetailsSubtitle.textContent = [validText(match.dateTime), validText(match.competition), validText(match.status)].filter(Boolean).join(' · ');
+      matchDetailsBody.replaceChildren();
+      const original = createDetailSection('Dados da partida', [
+        ['Data e horário', validText(match.dateTime)], ['Competição', validText(match.competition)], ['Status', validText(match.status)], ['Informações', validText(match.info)]
+      ]);
+      if (original) matchDetailsBody.appendChild(original);
+      const statisticsSection = createDetailSection('Estatísticas pré-jogo', [
+        ['Gols esperados', formatNumber(match.gols)], ['Escanteios médios', formatNumber(match.escanteios)], ['Cartões médios', formatNumber(match.cartoes)], ['Confiança +1,5', validText(match.plus15)], ['Confiança +2,5', validText(match.plus25)]
+      ]);
+      if (statisticsSection) matchDetailsBody.appendChild(statisticsSection);
+      const liveSection = createDetailSection('Dados atuais ou resultado', [
+        ['Placar', sumValid(match.realGolsCasa, match.realGolsFora) === null ? '' : `${formatNumber(match.realGolsCasa, 0)} x ${formatNumber(match.realGolsFora, 0)}`],
+        ['Escanteios', sumValid(match.realEscCasa, match.realEscFora) === null ? '' : `${formatNumber(match.realEscCasa, 0)} x ${formatNumber(match.realEscFora, 0)}`],
+        ['Chutes alvo', sumValid(match.realChutesCasa, match.realChutesFora) === null ? '' : `${formatNumber(match.realChutesCasa, 0)} x ${formatNumber(match.realChutesFora, 0)}`],
+        ['Cartões', sumValid(match.realCartoesCasa, match.realCartoesFora) === null ? '' : `${formatNumber(match.realCartoesCasa, 0)} x ${formatNumber(match.realCartoesFora, 0)}`]
+      ]);
+      if (liveSection) matchDetailsBody.appendChild(liveSection);
+      if (Array.isArray(match.stats100) && match.stats100.length) {
+        const stats = document.createElement('div'); stats.className = 'p-3 bg-slate-800/90 rounded-lg border border-slate-700/80 space-y-2';
+        const heading = document.createElement('span'); heading.className = 'font-bold text-indigo-300 block text-[11px] uppercase tracking-wider'; heading.textContent = 'Estatísticas de 100% dos jogos'; stats.appendChild(heading);
+        match.stats100.forEach(item => { if (!item || !validText(item.team)) return; const p = document.createElement('p'); p.className = 'text-slate-300'; p.textContent = `${item.team}: ${(item.lines || []).filter(validText).join(' · ')}`; stats.appendChild(p); });
+        if (stats.childElementCount > 1) matchDetailsBody.appendChild(stats);
+      }
+      const aiSection = document.createElement('div'); aiSection.className = 'space-y-2';
+      const aiHeading = document.createElement('span'); aiHeading.className = 'font-bold text-emerald-400 block text-[11px] uppercase tracking-wider'; aiHeading.textContent = 'Análise adicional da IA'; aiSection.appendChild(aiHeading);
+      const aiContent = document.createElement('div'); renderAIAnalysis(aiContent, match.aiAnalysis); aiSection.appendChild(aiContent); matchDetailsBody.appendChild(aiSection);
+    }
+
+    function openMatchModal(matchId, event) {
+      if (event) event.stopPropagation();
+      const match = getMatchDetails(matchId);
+      if (!match) return;
+      matchDetailsModal.dataset.matchId = matchId;
+      renderMatchModal(match);
+      matchDetailsModal.classList.remove('hidden');
+    }
+
+    function closeMatchModal() {
+      matchDetailsModal.classList.add('hidden');
+      delete matchDetailsModal.dataset.matchId;
+    }
+
+    function refreshOpenMatchModal() {
+      const id = matchDetailsModal.dataset.matchId;
+      if (id && !matchDetailsModal.classList.contains('hidden')) renderMatchModal(getMatchDetails(id));
+    }
+
     function saveToLocalStorage() {
       const state = storage.save(matchesData, permanentHistory);
       matchesData = state.matches; permanentHistory = state.history;
@@ -557,6 +722,9 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
     clearTextareaBtn.addEventListener('click', () => rawTextInput.value = '');
 
     closeModalBtn.addEventListener('click', () => compareModal.classList.add('hidden'));
+    closeMatchDetailsBtn.addEventListener('click', closeMatchModal);
+    matchDetailsModal.addEventListener('click', (e) => { if (e.target === matchDetailsModal) closeMatchModal(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeMatchModal(); compareModal.classList.add('hidden'); ticketModal.classList.add('hidden'); } });
     compareModal.addEventListener('click', (e) => { if (e.target === compareModal) compareModal.classList.add('hidden'); });
 
     closeTicketModalBtn.addEventListener('click', () => ticketModal.classList.add('hidden'));
@@ -599,19 +767,19 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
 
       showToast("Consultando IA do Gemini...");
       
-      const totalRealGols = match.realGolsCasa + match.realGolsFora;
-      const totalRealEsc = match.realEscCasa + match.realEscFora;
-      const totalRealCartoes = match.realCartoesCasa + match.realCartoesFora;
+      const totalRealGols = sumValid(match.realGolsCasa, match.realGolsFora);
+      const totalRealEsc = sumValid(match.realEscCasa, match.realEscFora);
+      const totalRealCartoes = sumValid(match.realCartoesCasa, match.realCartoesFora);
+      const promptValue = value => isValidValue(value) ? String(value) : 'não disponível';
 
       const prompt = `Você é um especialista em análise estatística de futebol.
 Jogo: ${match.title} (${match.dateTime})
-Status atual: ${match.status}
-Sugestão: ${match.sugestao} (@${match.odd})
-Projeções: Gols: ${match.gols}, Escanteios: ${match.escanteios}, Cartões: ${match.cartoes}
-Estatísticas Reais Lançadas: Placar ${match.realGolsCasa}x${match.realGolsFora} (Total: ${totalRealGols}), Escanteios ${match.realEscCasa}x${match.realEscFora} (Total: ${totalRealEsc}), Cartões ${match.realCartoesCasa}x${match.realCartoesFora} (Total: ${totalRealCartoes}).
-Informações extras: ${match.info}
+Status atual: ${promptValue(match.status)}
+Dados estatísticos importados: gols=${promptValue(match.gols)}, escanteios=${promptValue(match.escanteios)}, cartões=${promptValue(match.cartoes)}
+Dados reais disponíveis: placar=${promptValue(match.realGolsCasa)}x${promptValue(match.realGolsFora)} (total=${promptValue(totalRealGols)}), escanteios=${promptValue(match.realEscCasa)}x${promptValue(match.realEscFora)} (total=${promptValue(totalRealEsc)}), cartões=${promptValue(match.realCartoesCasa)}x${promptValue(match.realCartoesFora)} (total=${promptValue(totalRealCartoes)}).
+Informações extras: ${promptValue(match.info)}
 
-Forneça um breve resumo tático de até 4 linhas, avaliando se a entrada sugerida possui alto valor tático ou o motivo do resultado obtido.`;
+Responda somente em JSON válido, com campos opcionais summary, recentForm, liveStatus, statistics, importantPoints e observations. Não invente dados ausentes; omita campos sem informação.`;
 
       try {
         const resultText = await callGeminiApi(prompt);
@@ -659,24 +827,25 @@ Apresente em formato limpo:
       globalIaContent.textContent = "Processando visão geral consolidada com o Gemini IA...";
 
       const summary = matchesData.map(m => {
-        const trg = m.realGolsCasa + m.realGolsFora;
-        const tre = m.realEscCasa + m.realEscFora;
-        return `• ${escapeHtml(m.title)} [${escapeHtml(m.dateTime)}] - Status: ${m.status} | Exp: ${m.gols} Gols, ${m.escanteios} Esc | Real: ${m.realGolsCasa}x${m.realGolsFora} (${trg} gols), ${tre} escanteios`;
+        const trg = sumValid(m.realGolsCasa, m.realGolsFora);
+        const tre = sumValid(m.realEscCasa, m.realEscFora);
+        return `• ${validText(m.title)} [${validText(m.dateTime)}] - Status: ${validText(m.status)} | Estatísticas: ${validText(m.gols) || 'N/D'} gols, ${validText(m.escanteios) || 'N/D'} escanteios | Dados reais: ${validText(m.realGolsCasa) || 'N/D'}x${validText(m.realGolsFora) || 'N/D'} (total ${trg === null ? 'N/D' : trg} gols), ${tre === null ? 'N/D' : tre} escanteios`;
       }).join('\n');
 
-      const prompt = `Você é um analista chefe de apostas esportivas. Avalie as seguintes partidas da rodada:
+      const prompt = `Você é um analista de dados esportivos. Analise as seguintes partidas sem inventar informações ausentes:
 ${summary}
 
-Responda em formato objetivo:
-1. Resumo do desempenho geral dos cards.
-2. Destaques de maior confiabilidade para os jogos pendentes/ao vivo.
-3. Recomendação de gestão de banca para a rodada.`;
+Responda somente em JSON válido, com campos opcionais summary, recentForm, liveStatus, statistics, importantPoints e observations. Não inclua recomendações financeiras ou de apostas.`;
 
       try {
         const text = await callGeminiApi(prompt);
-        globalIaContent.textContent = text;
+        renderAIAnalysis(globalIaContent, text);
       } catch (e) {
-        globalIaContent.textContent = "Falha ao consultar a IA. Tente novamente mais tarde.";
+        globalIaContent.textContent = '';
+        const error = document.createElement('p');
+        error.className = 'text-slate-400 italic';
+        error.textContent = 'Análise adicional indisponível no momento.';
+        globalIaContent.appendChild(error);
       }
     });
 
@@ -685,7 +854,7 @@ Responda em formato objetivo:
       if (matchesData.length === 0) return alert('Nenhuma partida disponível para exportar.');
       
       let txtContent = matchesData.map(m => {
-        return m.rawText || `${escapeHtml(m.title)} - [${escapeHtml(m.dateTime)}]\n+2,5: ${escapeHtml(m.plus25)}\n+1,5: ${escapeHtml(m.plus15)}\nQuantidade esperada de gols no jogo: ${m.gols}\nMédia de escanteios: ${m.escanteios}\nMédia de cartões: ${m.cartoes}\nInfo: ${escapeHtml(m.info)}\nSugestão de odd combinada: ${m.odd} — ${escapeHtml(m.sugestao)}`;
+        return m.rawText || `${escapeHtml(m.title)} - [${escapeHtml(m.dateTime)}]\n${isValidValue(m.plus25) ? `+2,5: ${escapeHtml(m.plus25)}\\n` : ''}${isValidValue(m.plus15) ? `+1,5: ${escapeHtml(m.plus15)}\\n` : ''}${validMetric(m.gols) ? `Quantidade esperada de gols no jogo: ${formatNumber(m.gols)}\\n` : ''}${validMetric(m.escanteios) ? `Média de escanteios: ${formatNumber(m.escanteios)}\\n` : ''}${validMetric(m.cartoes) ? `Média de cartões: ${formatNumber(m.cartoes)}\\n` : ''}${validText(m.info) ? `Info: ${escapeHtml(m.info)}\\n` : ''}${validText(m.sugestao) ? `Sugestão: ${escapeHtml(m.sugestao)}${validMetric(m.odd) ? ` @${formatNumber(m.odd, 2)}` : ''}` : ''}`;
       }).join('\n\n' + '='.repeat(40) + '\n\n');
 
       const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
@@ -768,21 +937,21 @@ Responda em formato objetivo:
             parsedDate: parseDateTimeString(item.dateTime || ""),
             plus25: sanitizeText(item.plus25 || "N/I"),
             plus15: sanitizeText(item.plus15 || "N/I"),
-            gols: item.gols || 0,
-            escanteios: item.escanteios || 0,
-            cartoes: item.cartoes || 0,
+            gols: core.number(item.gols, null),
+            escanteios: core.number(item.escanteios, null),
+            cartoes: core.number(item.cartoes, null),
             info: sanitizeText(item.info || ""),
-            odd: item.odd || 0,
+            odd: core.number(item.odd, null),
             sugestao: sanitizeText(item.sugestao || ""),
             status: item.status || "pending",
-            realGolsCasa: item.realGolsCasa || 0,
-            realGolsFora: item.realGolsFora || 0,
-            realEscCasa: item.realEscCasa || 0,
-            realEscFora: item.realEscFora || 0,
-            realChutesCasa: item.realChutesCasa || 0,
-            realChutesFora: item.realChutesFora || 0,
-            realCartoesCasa: item.realCartoesCasa || 0,
-            realCartoesFora: item.realCartoesFora || 0,
+            realGolsCasa: core.number(item.realGolsCasa, null),
+            realGolsFora: core.number(item.realGolsFora, null),
+            realEscCasa: core.number(item.realEscCasa, null),
+            realEscFora: core.number(item.realEscFora, null),
+            realChutesCasa: core.number(item.realChutesCasa, null),
+            realChutesFora: core.number(item.realChutesFora, null),
+            realCartoesCasa: core.number(item.realCartoesCasa, null),
+            realCartoesFora: core.number(item.realCartoesFora, null),
             iaAnalysis: item.iaAnalysis || "",
             stats100: (item.stats100 || []).map(st => ({
               team: sanitizeText(st.team),
@@ -793,7 +962,7 @@ Responda em formato objetivo:
         } catch (e) {}
       }
 
-      if (parsedMatches.length === 0) parsedMatches = parseMatchesTextRobust(content);
+      if (parsedMatches.length === 0) parsedMatches = parser.parse(content).matches;
 
       if (parsedMatches.length === 0) {
         alert('Nenhuma partida válida encontrada no padrão suportado.');
@@ -831,88 +1000,7 @@ Responda em formato objetivo:
 
     function parseDateTimeString(dtStr) { return core.parseMatchDate(dtStr) || new Date(0); }
 
-    function parseMatchesTextRobust(rawText) {
-      const matchHeaderRegex = /([^\n]+?\s*x\s*[^\n]+?)\s*-\s*\[(\d{2}\/\d{2}\/\d{4}\s*-\s*\d{2}:\d{2})\]/g;
-      const matches = [];
-      let match;
-      const indices = [];
-
-      while ((match = matchHeaderRegex.exec(rawText)) !== null) {
-        indices.push({ index: match.index, title: sanitizeText(match[1]), dateTime: match[2].trim() });
-      }
-
-      if (indices.length === 0) return [];
-
-      for (let i = 0; i < indices.length; i++) {
-        const start = indices[i].index;
-        const end = (i + 1 < indices.length) ? indices[i + 1].index : rawText.length;
-        const block = rawText.slice(start, end).trim();
-
-        const title = indices[i].title;
-        const dateTime = indices[i].dateTime;
-
-        const p25Match = block.match(/\+2,5:\s*([^\n]+)/);
-        const plus25 = p25Match ? sanitizeText(p25Match[1]) : "N/I";
-
-        const p15Match = block.match(/\+1,5:\s*([^\n]+)/);
-        const plus15 = p15Match ? sanitizeText(p15Match[1]) : "N/I";
-
-        const golsMatch = block.match(/Quantidade esperada de gols no jogo:\s*([\d\.,]+)/);
-        const gols = golsMatch ? parseFloat(golsMatch[1].replace(',', '.')) : 0;
-
-        const escanteiosMatch = block.match(/Média de escanteios:\s*([\d\.,]+)/);
-        const escanteios = escanteiosMatch ? parseFloat(escanteiosMatch[1].replace(',', '.')) : 0;
-
-        const cartoesMatch = block.match(/Média de cartões:\s*([\d\.,]+)/);
-        const cartoes = cartoesMatch ? parseFloat(cartoesMatch[1].replace(',', '.')) : 0;
-
-        const infoMatch = block.match(/Info:\s*([^\n]+)/);
-        const info = infoMatch ? sanitizeText(infoMatch[1]) : "";
-
-        const oddMatch = block.match(/Sugestão de odd combinada:\s*([\d\.,]+)\s*—\s*([^\n]+)/);
-        const odd = oddMatch ? parseFloat(oddMatch[1].replace(',', '.')) : 0;
-        const sugestao = oddMatch ? sanitizeText(oddMatch[2]) : "";
-
-        const stats100Regex = /Em 100% dos jogos do (.*?):\n([\s\S]*?)(?=(Em 100%|Sugestão|$))/g;
-        let stats100List = [];
-        let stMatch;
-
-        while ((stMatch = stats100Regex.exec(block)) !== null) {
-          const teamName = sanitizeText(stMatch[1]);
-          const statsLines = stMatch[2].trim().split('\n').map(l => sanitizeText(l)).filter(Boolean);
-          stats100List.push({ team: teamName, lines: statsLines });
-        }
-
-        matches.push({
-          id: 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-          title,
-          dateTime,
-          parsedDate: parseDateTimeString(dateTime),
-          plus25,
-          plus15,
-          gols,
-          escanteios,
-          cartoes,
-          info,
-          odd,
-          sugestao,
-          status: 'pending',
-          realGolsCasa: 0,
-          realGolsFora: 0,
-          realEscCasa: 0,
-          realEscFora: 0,
-          realChutesCasa: 0,
-          realChutesFora: 0,
-          realCartoesCasa: 0,
-          realCartoesFora: 0,
-          iaAnalysis: "",
-          stats100: stats100List,
-          rawText: block
-        });
-      }
-
-      return matches;
-    }
+    function parseMatchesTextRobust(rawText) { return parser.parse(rawText).matches; }
 
     // Identificação Automática do Status das Partidas baseado no Horário do Sistema
     function autoUpdateGameStatuses() {
@@ -1001,7 +1089,7 @@ Responda em formato objetivo:
             <span>${statusTag}</span>
           </div>
           <span class="font-bold text-white text-xs">${escapeHtml(m.title)}</span>
-          <div class="text-[11px] text-slate-300 mt-1">Placar: ${m.realGolsCasa}x${m.realGolsFora} | Esc: ${m.realEscCasa}x${m.realEscFora}</div>
+          ${sumValid(m.realGolsCasa, m.realGolsFora) !== null || sumValid(m.realEscCasa, m.realEscFora) !== null ? `<div class="text-[11px] text-slate-300 mt-1">${sumValid(m.realGolsCasa, m.realGolsFora) !== null ? `Placar: ${formatNumber(m.realGolsCasa, 0)}x${formatNumber(m.realGolsFora, 0)}` : ''}${sumValid(m.realGolsCasa, m.realGolsFora) !== null && sumValid(m.realEscCasa, m.realEscFora) !== null ? ' | ' : ''}${sumValid(m.realEscCasa, m.realEscFora) !== null ? `Esc: ${formatNumber(m.realEscCasa, 0)}x${formatNumber(m.realEscFora, 0)}` : ''}</div>` : ''}
         `;
         historyContainer.appendChild(item);
       });
@@ -1105,8 +1193,12 @@ Responda em formato objetivo:
         match.result = match.result || {};
         const map = { realGolsCasa: 'homeGoals', realGolsFora: 'awayGoals', realEscCasa: 'cornersHome', realEscFora: 'cornersAway', realCartoesCasa: 'cardsHome', realCartoesFora: 'cardsAway' };
         if (map[field]) match.result[map[field]] = parsed;
-        match.result.corners = (Number(match.result.cornersHome) || 0) + (Number(match.result.cornersAway) || 0);
-        match.result.cards = (Number(match.result.cardsHome) || 0) + (Number(match.result.cardsAway) || 0);
+        const cornersHome = toValidNumber(match.result.cornersHome);
+        const cornersAway = toValidNumber(match.result.cornersAway);
+        const cardsHome = toValidNumber(match.result.cardsHome);
+        const cardsAway = toValidNumber(match.result.cardsAway);
+        if (cornersHome !== null && cornersAway !== null) match.result.corners = cornersHome + cornersAway;
+        if (cardsHome !== null && cardsAway !== null) match.result.cards = cardsHome + cardsAway;
         const evaluation = core.evaluatePrediction(match.prediction || match, core.getResult(match));
         if (evaluation !== 'pending') { match.evaluation = { ...(match.evaluation || {}), status: evaluation }; match.status = evaluation; }
         const permMatch = permanentHistory.find(m => m.id === id);
@@ -1144,7 +1236,7 @@ Responda em formato objetivo:
 
     function copyBet(sugestao, odd, event) {
       if (event) event.stopPropagation();
-      const textToCopy = `${sugestao} (Odd: @${odd.toFixed(2)})`;
+      const textToCopy = `${validText(sugestao)}${validMetric(odd) ? ` (Odd: @${formatNumber(odd, 2)})` : ''}`.trim();
       const tempInput = document.createElement('textarea');
       tempInput.value = textToCopy;
       document.body.appendChild(tempInput);
@@ -1341,15 +1433,15 @@ Responda em formato objetivo:
         const isSelectedMulti = selectedForMulti.has(m.id);
         const statusBadge = getGameStatusBadgeHtml(m.parsedDate, m.status);
 
-        const totalRealGols = m.realGolsCasa + m.realGolsFora;
-        const totalRealEsc = m.realEscCasa + m.realEscFora;
-        const totalRealCartoes = m.realCartoesCasa + m.realCartoesFora;
+        const totalRealGols = sumValid(m.realGolsCasa, m.realGolsFora);
+        const totalRealEsc = sumValid(m.realEscCasa, m.realEscFora);
+        const totalRealCartoes = sumValid(m.realCartoesCasa, m.realCartoesFora);
 
-        const golsMet = m.gols > 0 && totalRealGols >= m.gols;
-        const escMet = m.escanteios > 0 && totalRealEsc >= m.escanteios;
-        const cartMet = m.cartoes > 0 && totalRealCartoes >= m.cartoes;
+        const golsMet = validMetric(m.gols) && validMetric(totalRealGols) && totalRealGols >= m.gols;
+        const escMet = validMetric(m.escanteios) && validMetric(totalRealEsc) && totalRealEsc >= m.escanteios;
+        const cartMet = validMetric(m.cartoes) && validMetric(totalRealCartoes) && totalRealCartoes >= m.cartoes;
 
-        const isFinished = m.status === 'green' || m.status === 'red' || m.status === 'void';
+        const isFinished = ['finished', 'green', 'red', 'push', 'void', 'cancelled'].includes(m.status);
         const isLiveOrFinished = m.status === 'live' || isFinished;
 
         let cardBorderColor = 'border-slate-700 hover:border-slate-600';
@@ -1416,7 +1508,7 @@ Responda em formato objetivo:
 
             <div class="flex items-center justify-between mt-1 relative z-20">
               <h3 class="text-base font-bold text-white tracking-wide">${escapeHtml(m.title)}</h3>
-              ${isFinished ? `<span class="bg-slate-900 text-white font-black px-2 py-1 rounded-md border border-slate-600 shadow text-[10px]">FINALIZADO: ${m.realGolsCasa} x ${m.realGolsFora}</span>` : ''}
+              ${isFinished && sumValid(m.realGolsCasa, m.realGolsFora) !== null ? `<span class="bg-slate-900 text-white font-black px-2 py-1 rounded-md border border-slate-600 shadow text-[10px]">FINALIZADO: ${formatNumber(m.realGolsCasa, 0)} x ${formatNumber(m.realGolsFora, 0)}</span>` : ''}
               ${!isFinished ? `
               <div class="flex gap-1 text-[11px]">
                 <span class="px-1.5 py-0.5 rounded border ${getBadgeBg(m.plus15)} font-medium">+1.5: ${escapeHtml(m.plus15)}</span>
@@ -1427,44 +1519,13 @@ Responda em formato objetivo:
           </div>
 
           <!-- Placar e Estatísticas em Tempo Real -->
-          ${isLiveOrFinished ? `
-          <div class="px-4 py-2 bg-slate-950/60 border-b border-slate-700/50 flex items-center justify-around text-xs">
-            <div class="text-center">
-              <span class="block text-[10px] text-slate-400 font-semibold uppercase">Placar</span>
-              <span class="text-base font-black text-amber-400">${m.realGolsCasa} - ${m.realGolsFora}</span>
-            </div>
-            <div class="text-center">
-              <span class="block text-[10px] text-slate-400 font-semibold uppercase">Escanteios</span>
-              <span class="text-xs font-bold text-cyan-300">🚩 ${m.realEscCasa} x ${m.realEscFora}</span>
-            </div>
-            <div class="text-center">
-              <span class="block text-[10px] text-slate-400 font-semibold uppercase">Chutes Alvo</span>
-              <span class="text-xs font-bold text-emerald-300">🎯 ${m.realChutesCasa} x ${m.realChutesFora}</span>
-            </div>
-            <div class="text-center">
-              <span class="block text-[10px] text-slate-400 font-semibold uppercase">Cartões</span>
-              <span class="text-xs font-bold text-rose-300">🟨 ${m.realCartoesCasa} x ${m.realCartoesFora}</span>
-            </div>
-          </div>
-          ` : ''}
+          ${renderLiveMetrics(m, isLiveOrFinished)}
 
           <!-- Métricas Resumidas -->
           <div class="p-3 grid grid-cols-3 gap-2 bg-slate-900/40 text-center border-b border-slate-700/40 relative z-20">
-            <div class="p-2 rounded-lg border ${statBoxStyle(golsMet)}">
-              <span class="block text-[10px] opacity-80 uppercase font-semibold">Gols Exp.</span>
-              <span class="text-sm font-bold">${m.gols}</span>
-              ${isLiveOrFinished ? `<span class="block text-[9px] font-extrabold mt-0.5">${golsMet ? '✅ ' + totalRealGols : '❌ ' + totalRealGols}</span>` : ''}
-            </div>
-            <div class="p-2 rounded-lg border ${statBoxStyle(escMet)}">
-              <span class="block text-[10px] opacity-80 uppercase font-semibold">Escanteios</span>
-              <span class="text-sm font-bold">${m.escanteios}</span>
-              ${isLiveOrFinished ? `<span class="block text-[9px] font-extrabold mt-0.5">${escMet ? '✅ ' + totalRealEsc : '❌ ' + totalRealEsc}</span>` : ''}
-            </div>
-            <div class="p-2 rounded-lg border ${statBoxStyle(cartMet)}">
-              <span class="block text-[10px] opacity-80 uppercase font-semibold">Cartões</span>
-              <span class="text-sm font-bold">${m.cartoes}</span>
-              ${isLiveOrFinished ? `<span class="block text-[9px] font-extrabold mt-0.5">${cartMet ? '✅ ' + totalRealCartoes : '❌ ' + totalRealCartoes}</span>` : ''}
-            </div>
+            ${renderMetricCard('Gols Exp.', m.gols, totalRealGols, isLiveOrFinished, golsMet)}
+            ${renderMetricCard('Escanteios', m.escanteios, totalRealEsc, isLiveOrFinished, escMet)}
+            ${renderMetricCard('Cartões', m.cartoes, totalRealCartoes, isLiveOrFinished, cartMet)}
           </div>
 
           <!-- Sugestão -->
@@ -1476,7 +1537,7 @@ Responda em formato objetivo:
             </div>
             <div class="flex items-center gap-1.5 relative z-20">
               <div class="${getOddBadgeColor(m.odd)} border px-2.5 py-1 rounded-lg text-sm font-extrabold shadow">
-                @${m.odd.toFixed(2)}
+                ${validMetric(m.odd) ? '@' + formatNumber(m.odd, 2) : ''}
               </div>
               <button title="Copiar Aposta" class="copy-bet-btn bg-slate-700 hover:bg-slate-600 text-slate-200 p-1.5 rounded-lg text-xs transition-colors">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
@@ -1486,90 +1547,14 @@ Responda em formato objetivo:
           ` : ''}
 
           <!-- Botões de Ação do Card -->
-          <div class="card-trigger-area px-4 py-2 bg-slate-800/80 text-xs text-slate-400 flex items-center justify-between gap-2 relative z-20 cursor-pointer hover:bg-slate-700/50 transition-colors">
+          <div class="card-trigger-area px-4 py-2 bg-slate-800/80 text-xs text-slate-400 flex items-center justify-between gap-2 relative z-20">
             <div class="flex items-center gap-2">
-              <button class="compare-btn text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 hover:underline">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-                Comparar
-              </button>
-              <button class="ia-single-btn text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-950/40 px-2 py-1 rounded border border-emerald-800/50 hover:border-emerald-500 transition-colors">
-                <span>✨ IA</span>
-              </button>
+              <button class="compare-btn text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 hover:underline">Comparar</button>
+              <button class="ia-single-btn text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-950/40 px-2 py-1 rounded border border-emerald-800/50 hover:border-emerald-500 transition-colors"><span>✨ IA</span></button>
             </div>
-            <div class="flex items-center gap-1 text-slate-400 hover:text-indigo-300 pointer-events-none">
-              <span class="expand-text font-medium">Detalhes</span>
-              <svg class="w-4 h-4 transform transition-transform duration-200 expand-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-            </div>
+            <button class="open-details-btn text-slate-300 hover:text-white font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-700/60">Detalhes <span aria-hidden="true">↗</span></button>
           </div>
 
-          <!-- Conteúdo Expansível Isolado -->
-          <div class="expanded-content hidden p-4 bg-slate-900/90 border-t border-slate-700 space-y-4 text-xs text-slate-300 cursor-default">
-            
-            ${m.iaAnalysis ? `
-              <div class="p-3 bg-emerald-950/40 border border-emerald-500/40 rounded-lg text-emerald-200 relative z-20">
-                <span class="font-bold text-emerald-400 block mb-1">🤖 Análise da IA Gemini:</span>
-                <p class="leading-relaxed whitespace-pre-wrap text-slate-200">${escapeHtml(m.iaAnalysis)}</p>
-              </div>
-            ` : ''}
-
-            <!-- Painel para Lançamento Rápido -->
-            <div class="p-3 bg-slate-800/90 rounded-lg border border-slate-700/80 space-y-2 relative z-20">
-              <span class="font-bold text-indigo-300 block text-[11px] uppercase tracking-wider">Lançar Estatísticas Reais</span>
-              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
-                <div>
-                  <label class="block text-slate-400">Gols (A x B)</label>
-                  <div class="flex gap-1 mt-0.5">
-                    <input type="number" min="0" value="${m.realGolsCasa}" data-field="realGolsCasa" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
-                    <input type="number" min="0" value="${m.realGolsFora}" data-field="realGolsFora" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
-                  </div>
-                </div>
-                <div>
-                  <label class="block text-slate-400">Escanteios (A x B)</label>
-                  <div class="flex gap-1 mt-0.5">
-                    <input type="number" min="0" value="${m.realEscCasa}" data-field="realEscCasa" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
-                    <input type="number" min="0" value="${m.realEscFora}" data-field="realEscFora" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
-                  </div>
-                </div>
-                <div>
-                  <label class="block text-slate-400">Chutes Alvo (A x B)</label>
-                  <div class="flex gap-1 mt-0.5">
-                    <input type="number" min="0" value="${m.realChutesCasa}" data-field="realChutesCasa" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
-                    <input type="number" min="0" value="${m.realChutesFora}" data-field="realChutesFora" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
-                  </div>
-                </div>
-                <div>
-                  <label class="block text-slate-400">Cartões (A x B)</label>
-                  <div class="flex gap-1 mt-0.5">
-                    <input type="number" min="0" value="${m.realCartoesCasa}" data-field="realCartoesCasa" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
-                    <input type="number" min="0" value="${m.realCartoesFora}" data-field="realCartoesFora" class="real-input w-full bg-slate-900 border border-slate-700 rounded px-1 text-center text-white" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            ${m.info ? `
-              <div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
-                <span class="font-semibold text-indigo-300 block mb-1">Informações Adicionais:</span>
-                <p class="leading-relaxed text-slate-300">${escapeHtml(m.info)}</p>
-              </div>
-            ` : ''}
-
-            ${m.stats100.length > 0 ? `
-              <div class="space-y-3 pt-1">
-                <span class="font-bold text-slate-200 block border-b border-slate-700 pb-1">
-                  Estatísticas de 100% dos jogos:
-                </span>
-                ${m.stats100.map(st => `
-                  <div class="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700/80">
-                    <span class="font-semibold text-amber-400 block mb-1.5">${escapeHtml(st.team)}</span>
-                    <ul class="space-y-1 list-disc list-inside text-slate-300">
-                      ${st.lines.map(line => `<li>${escapeHtml(line)}</li>`).join('')}
-                    </ul>
-                  </div>
-                `).join('')}
-              </div>
-            ` : ''}
-          </div>
         `;
 
         // Atribuição de Eventos
@@ -1592,22 +1577,7 @@ Responda em formato objetivo:
         const checkbox = card.querySelector('.multi-checkbox');
         checkbox.addEventListener('click', (e) => toggleMultiSelect(m.id, e));
 
-        // Expansão estritamente restrita à barra de gatilho do card (Evitando expansões indesejadas)
-        const triggerArea = card.querySelector('.card-trigger-area');
-        triggerArea.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const content = card.querySelector('.expanded-content');
-          const icon = card.querySelector('.expand-icon');
-
-          const isHidden = content.classList.contains('hidden');
-          if (isHidden) {
-            content.classList.remove('hidden');
-            icon.classList.add('rotate-180');
-          } else {
-            content.classList.add('hidden');
-            icon.classList.remove('rotate-180');
-          }
-        });
+        card.querySelector('.open-details-btn').addEventListener('click', (e) => openMatchModal(m.id, e));
 
         cardsContainer.appendChild(card);
       });
