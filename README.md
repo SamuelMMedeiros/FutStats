@@ -16,9 +16,11 @@ O FutStats é uma aplicação local para importação, acompanhamento e análise
 | `manifest.json` e `sw.js` | PWA e funcionamento offline dos recursos locais. |
 | `tests/core.test.js` | Testes automatizados do núcleo funcional. |
 
-## Gemini
+## Gemini e Netlify
 
-Configure `GEMINI_API_KEY` somente no ambiente do backend/serverless. A aplicação chama `POST /api/gemini`; a chave nunca é enviada ao navegador nem armazenada no `localStorage`. O endpoint trata ausência de chave, autenticação, limite de requisições, timeout, resposta vazia e indisponibilidade temporária.
+O projeto está preparado para o Netlify com `netlify.toml` e a função moderna `netlify/functions/gemini.mjs`, publicada em `POST /api/gemini`. Configure `GEMINI_API_KEY` no painel do projeto Netlify em **Project configuration → Environment variables**. A chave nunca deve ser colocada no HTML, JavaScript público, `localStorage`, README ou Git. O endpoint usa `Netlify.env.get('GEMINI_API_KEY')`, valida o payload, aplica timeout, trata autenticação, limite de requisições, resposta vazia e indisponibilidade temporária, e retorna apenas dados necessários ao frontend.
+
+O arquivo legado `api/gemini.js` permanece no repositório para compatibilidade com outros provedores serverless, mas o deploy Netlify utiliza exclusivamente `netlify/functions/gemini.mjs`.
 
 ## Execução e testes
 
