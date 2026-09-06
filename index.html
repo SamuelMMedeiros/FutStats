@@ -731,6 +731,24 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
       const aiContent = document.createElement('div'); renderAIAnalysis(aiContent, match.aiAnalysis); aiSection.appendChild(aiContent); matchDetailsBody.appendChild(aiSection);
     }
 
+    async function enrichMatchDetails(match) {
+      if (!match || match.detailsLoaded || !validText(match.sourceId) || !validText(match.source)) return;
+      match.detailsLoaded = true;
+      const previous = matchDetailsSubtitle.textContent;
+      matchDetailsSubtitle.textContent = `${previous} · buscando detalhes da fonte...`;
+      try {
+        const response = await fetch(`/api/fixture-details?source=${encodeURIComponent(match.source)}&id=${encodeURIComponent(match.sourceId)}`, { headers: { Accept: 'application/json' } });
+        const payload = await response.json().catch(() => ({}));
+        if (response.ok && payload.success && payload.details) {
+          Object.assign(match, payload.details);
+          saveToLocalStorage();
+          renderMatchModal(match);
+        } else if (payload.error === 'API_FOOTBALL_DAILY_LIMIT') {
+          showToast('Limite diário da API-Football preservado; detalhes complementares não foram consultados.');
+        }
+      } catch { showToast('Detalhes complementares indisponíveis no momento.'); }
+    }
+
     function openMatchModal(matchId, event) {
       if (event) event.stopPropagation();
       const match = getMatchDetails(matchId);
@@ -738,6 +756,7 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
       matchDetailsModal.dataset.matchId = matchId;
       renderMatchModal(match);
       matchDetailsModal.classList.remove('hidden');
+      enrichMatchDetails(match);
     }
 
     function closeMatchModal() {
