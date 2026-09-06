@@ -24,7 +24,14 @@ export default async function gemini(req) {
     return jsonResponse(400, { success: false, error: 'INVALID_JSON', message: 'Payload inválido.' });
   }
 
-  const prompt = typeof payload?.prompt === 'string' ? payload.prompt.trim() : '';
+  let prompt = typeof payload?.prompt === 'string' ? payload.prompt.trim() : '';
+  let structured = false;
+  if (payload?.mode === 'match-analysis' && payload?.match && typeof payload.match === 'object') {
+    const match = payload.match;
+    const safe = value => value === undefined || value === null || value === '' ? 'não disponível' : String(value).slice(0, 600);
+    structured = true;
+    prompt = `Você é uma especialista esportiva com foco em futebol e pesquisa de dados. Analise somente a partida indicada abaixo, usando exclusivamente os dados fornecidos. Não invente estatísticas, odds, lesões, escalações ou confrontos que não estejam disponíveis. Se um dado faltar, omita o campo correspondente. Esta análise é estatística e não garante resultados.\n\nPartida: ${safe(match.title)}\nData e horário: ${safe(match.dateTime)}\nCompetição: ${safe(match.competition)}\nStatus: ${safe(match.status)}\nDados da fonte: ${safe(JSON.stringify(match.apiStats || {}))}\nEventos disponíveis: ${safe(JSON.stringify(match.apiEvents || []))}\nHistórico fornecido: ${safe(JSON.stringify(match.history || {}))}\n\nAnalise, quando houver dados suficientes, gols acima de 2,5, gols acima de 1,5, ambas as equipes marcam, gols esperados, escanteios, cartões, forma recente e confrontos diretos. Retorne somente JSON válido com estes campos opcionais: summary, recentForm, liveStatus, statistics, importantPoints, observations, over25Probability, over15Probability, bothTeamsToScore, expectedGoals, averageCorners, averageCards, conservativeMarkets. Para probabilidades use somente baixa, média ou alta e inclua uma observação de dados insuficientes quando aplicável.`;
+  }
   if (!prompt || prompt.length > MAX_PROMPT_LENGTH) {
     return jsonResponse(400, { success: false, error: 'INVALID_PROMPT', message: 'Solicitação inválida ou muito longa.' });
   }
@@ -42,7 +49,7 @@ export default async function gemini(req) {
       },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 1200 }
+        generationConfig: { temperature: 0.2, maxOutputTokens: 1600, ...(structured ? { responseMimeType: 'application/json' } : {}) }
       })
     });
 
@@ -62,7 +69,7 @@ export default async function gemini(req) {
       return jsonResponse(502, { success: false, error: 'AI_EMPTY_RESPONSE', message: 'A IA retornou uma resposta vazia.' });
     }
 
-    return jsonResponse(200, { success: true, text });
+    return jsonResponse(200, { success: true, text, structured });
   } catch (error) {
     return jsonResponse(502, {
       success: false,

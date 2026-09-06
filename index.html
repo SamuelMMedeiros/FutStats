@@ -629,7 +629,7 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
       }
       if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
       const normalized = {};
-      const fields = ['summary', 'recentForm', 'liveStatus', 'statistics', 'importantPoints', 'observations'];
+      const fields = ['summary', 'recentForm', 'liveStatus', 'statistics', 'importantPoints', 'observations', 'over25Probability', 'over15Probability', 'bothTeamsToScore', 'expectedGoals', 'averageCorners', 'averageCards', 'conservativeMarkets'];
       fields.forEach(field => {
         const raw = value[field];
         if (Array.isArray(raw)) {
@@ -648,7 +648,7 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
     function renderAIAnalysis(container, response) {
       container.replaceChildren();
       const data = normalizeAIResponse(response);
-      const labels = { summary: 'Resumo', recentForm: 'Forma recente', liveStatus: 'Situação atual', statistics: 'Estatísticas relevantes', importantPoints: 'Pontos importantes', observations: 'Observações' };
+      const labels = { summary: 'Resumo', recentForm: 'Forma recente', liveStatus: 'Situação atual', statistics: 'Estatísticas relevantes', importantPoints: 'Pontos importantes', observations: 'Observações', over25Probability: 'Probabilidade +2,5', over15Probability: 'Probabilidade +1,5', bothTeamsToScore: 'Ambas marcam', expectedGoals: 'Gols esperados', averageCorners: 'Média de escanteios', averageCards: 'Média de cartões', conservativeMarkets: 'Mercados conservadores' };
       Object.entries(labels).forEach(([key, label]) => {
         const value = data[key];
         if (!isValidValue(value) || (Array.isArray(value) && value.length === 0)) return;
@@ -857,12 +857,12 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
 
     // Chamada à API Gemini com tratamento de retentativa e backoff exponencial
     let activeAiRequest = null;
-    async function callGeminiApi(promptText) {
-      const prompt = String(promptText || '').trim();
-      if (!prompt || activeAiRequest) throw new Error('AI_REQUEST_IN_PROGRESS');
+    async function callGeminiApi(requestPayload) {
+      const payload = typeof requestPayload === 'string' ? { prompt: requestPayload.trim() } : requestPayload;
+      if ((!payload?.prompt && payload?.mode !== 'match-analysis') || activeAiRequest) throw new Error('AI_REQUEST_IN_PROGRESS');
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 22000);
-      activeAiRequest = fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }), signal: controller.signal })
+      activeAiRequest = fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: controller.signal })
         .then(async response => { const payload = await response.json().catch(() => ({})); if (!response.ok || !payload.success) throw new Error(payload.error || 'AI_UNAVAILABLE'); return payload.text; })
         .finally(() => { clearTimeout(timer); activeAiRequest = null; });
       return activeAiRequest;
@@ -876,22 +876,15 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
 
       showToast("Consultando IA do Gemini...");
       
-      const totalRealGols = sumValid(match.realGolsCasa, match.realGolsFora);
-      const totalRealEsc = sumValid(match.realEscCasa, match.realEscFora);
-      const totalRealCartoes = sumValid(match.realCartoesCasa, match.realCartoesFora);
-      const promptValue = value => isValidValue(value) ? String(value) : 'não disponível';
-
-      const prompt = `Você é um especialista em análise estatística de futebol.
-Jogo: ${match.title} (${match.dateTime})
-Status atual: ${promptValue(match.status)}
-Dados estatísticos importados: gols=${promptValue(match.gols)}, escanteios=${promptValue(match.escanteios)}, cartões=${promptValue(match.cartoes)}
-Dados reais disponíveis: placar=${promptValue(match.realGolsCasa)}x${promptValue(match.realGolsFora)} (total=${promptValue(totalRealGols)}), escanteios=${promptValue(match.realEscCasa)}x${promptValue(match.realEscFora)} (total=${promptValue(totalRealEsc)}), cartões=${promptValue(match.realCartoesCasa)}x${promptValue(match.realCartoesFora)} (total=${promptValue(totalRealCartoes)}).
-Informações extras: ${promptValue(match.info)}
-
-Responda somente em JSON válido, com campos opcionais summary, recentForm, liveStatus, statistics, importantPoints e observations. Não invente dados ausentes; omita campos sem informação.`;
+      const requestPayload = { mode: 'match-analysis', match: {
+        title: match.title, dateTime: match.dateTime, competition: match.competition,
+        status: match.statusLabel || match.status, info: match.info,
+        apiStats: match.apiStats || {}, apiEvents: match.apiEvents || [],
+        history: match.history || {}, score: { home: match.realGolsCasa, away: match.realGolsFora }
+      }};
 
       try {
-        const resultText = await callGeminiApi(prompt);
+        const resultText = await callGeminiApi(requestPayload);
         match.iaAnalysis = resultText;
         saveToLocalStorage();
         renderCards();
