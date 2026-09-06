@@ -38,3 +38,24 @@ Para testar a interface localmente, sirva a pasta por HTTP. Para testar PWA e se
 A importação TXT continua aceitando o formato legado com cabeçalhos `Equipe A x Equipe B - [DD/MM/YYYY - HH:MM]`. A importação JSON aceita um objeto, um array ou um backup exportado. Registros inválidos são ignorados quando possível, sem interromper os registros válidos.
 
 O ROI só é exibido quando há `stake` ou `valorApostado` e odds válidas. Na ausência desses dados, a interface apresenta `N/D` em vez de inventar valores.
+
+## Painel de partidas por data
+
+A aplicação agora pode carregar partidas por data usando `football-data.org` como fonte principal e `API-Football` como fallback controlado. O endpoint do frontend é `GET /api/fixtures?date=YYYY-MM-DD`; ele normaliza as fontes para os cards e mantém o fuso `America/Sao_Paulo`. O botão de análise Gemini continua sob demanda e não é executado automaticamente para cada card.
+
+O arquivo `supabase/schema.sql` cria o contador diário atômico da API-Football e a tabela de cache preparada para persistência. O orçamento padrão do backend é de 80 requisições por dia, deixando margem abaixo do limite informado de 100. A API-Football só é consultada como complemento quando a fonte principal não retorna partidas e o contador do Supabase autoriza a chamada.
+
+### Variáveis de ambiente do Netlify
+
+Configure os valores no projeto Netlify, em **Project configuration → Environment variables**, nunca no frontend:
+
+| Variável | Uso |
+|---|---|
+| `FOOTBALL_DATA_API_KEY` | Header `X-Auth-Token` da API football-data.org. |
+| `API_FOOTBALL_KEY` | Header `x-apisports-key` da API-Football. |
+| `API_FOOTBALL_DAILY_BUDGET` | Opcional; padrão `80`. |
+| `SUPABASE_URL` | URL do projeto Supabase. |
+| `SUPABASE_KEY` | Chave de servidor usada somente pelas funções Netlify. |
+| `GEMINI_API_KEY` | Chave usada apenas pela função `/api/gemini`. |
+
+Execute `supabase/schema.sql` no SQL Editor do Supabase antes de ativar o fallback da API-Football. Sem o schema do contador, o backend bloqueia o uso da API-Football para evitar ultrapassar o limite diário.
