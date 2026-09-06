@@ -581,6 +581,25 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
     function validMetric(value) { return toValidNumber(value) !== null; }
     function sumValid(a, b) { const left = toValidNumber(a); const right = toValidNumber(b); return left === null || right === null ? null : left + right; }
 
+    function renderMetricCard(label, value, actual, isLive, isHit) {
+      if (!validMetric(value)) return '';
+      const actualText = isLive && validMetric(actual) ? `<span class="block text-[9px] font-extrabold mt-0.5">${isHit ? '✅ ' : '❌ '}${formatNumber(actual, 2)}</span>` : '';
+      const style = !isLive ? 'bg-slate-800/60 border-slate-700/50 text-slate-300' : (isHit ? 'bg-emerald-950/50 border-emerald-500/60 text-emerald-300' : 'bg-rose-950/50 border-rose-500/60 text-rose-300');
+      return `<div class="p-2 rounded-lg border ${style}"><span class="block text-[10px] opacity-80 uppercase font-semibold">${label}</span><span class="text-sm font-bold">${formatNumber(value)}</span>${actualText}</div>`;
+    }
+
+    function renderLiveMetrics(match, isLive) {
+      if (!isLive) return '';
+      const items = [
+        ['Placar', match.realGolsCasa, match.realGolsFora, 'text-amber-400'],
+        ['Escanteios', match.realEscCasa, match.realEscFora, 'text-cyan-300'],
+        ['Chutes Alvo', match.realChutesCasa, match.realChutesFora, 'text-emerald-300'],
+        ['Cartões', match.realCartoesCasa, match.realCartoesFora, 'text-rose-300']
+      ].filter(([, home, away]) => validMetric(home) || validMetric(away));
+      if (!items.length) return '';
+      return `<div class="px-4 py-2 bg-slate-950/60 border-b border-slate-700/50 flex items-center justify-around text-xs">${items.map(([label, home, away, color]) => `<div class="text-center"><span class="block text-[10px] text-slate-400 font-semibold uppercase">${label}</span><span class="text-xs font-bold ${color}">${validMetric(home) ? formatNumber(home, 0) : ''} x ${validMetric(away) ? formatNumber(away, 0) : ''}</span></div>`).join('')}</div>`;
+    }
+
     function normalizeAIResponse(response) {
       let value = response;
       if (value && typeof value === 'object' && value.text !== undefined) value = value.text;
