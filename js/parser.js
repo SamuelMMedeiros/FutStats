@@ -49,8 +49,8 @@
       }
       const item = {
         title, dateTime,
-        plus25: core.sanitizeText(capture(block, /\+2[,.]5\s*:\s*([^\n]+)/i, 'N/I')),
-        plus15: core.sanitizeText(capture(block, /\+1[,.]5\s*:\s*([^\n]+)/i, 'N/I')),
+        plus25: core.sanitizeText(capture(block, /\+2[,.]5\s*:\s*([^\n]+)/i, '')),
+        plus15: core.sanitizeText(capture(block, /\+1[,.]5\s*:\s*([^\n]+)/i, '')),
         gols: toNumber(capture(block, /Quantidade\s+esperada\s+de\s+gols[^:]*:\s*([\d,.]+)/i, null), null),
         escanteios: toNumber(capture(block, /M[ée]dia\s+de\s+escanteios\s*:\s*([\d,.]+)/i, null), null),
         cartoes: toNumber(capture(block, /M[ée]dia\s+de\s+cart[õo]es\s*:\s*([\d,.]+)/i, null), null),
