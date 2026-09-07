@@ -1,5 +1,5 @@
 const MAX_PROMPT_LENGTH = 18000;
-const GEMINI_MODEL = 'gemini-3.6-flash';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 function jsonResponse(status, body) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
