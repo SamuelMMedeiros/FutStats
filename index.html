@@ -185,7 +185,7 @@
         <button id="refresh-fixtures-btn" class="bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold px-4 py-2 rounded-lg transition-colors">Atualizar</button>
       </div>
       <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-        <span id="fixtures-status-label">Escolha uma data para carregar as partidas.</span>
+        <span id="fixtures-status-label">Carregando automaticamente hoje, 7 dias anteriores e 7 dias seguintes...</span>
         <span id="fixtures-source-badge" class="px-2 py-1 rounded border border-slate-600">Fontes: football-data.org + API-Football</span>
       </div>
     </section>
@@ -387,7 +387,7 @@
     <div id="empty-state" class="hidden text-center py-16 bg-slate-800/50 rounded-xl border border-dashed border-slate-700">
       <svg class="w-12 h-12 text-slate-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 002 2h1.5a2.5 2.5 0 002.5-2.5V11.085M11 20c7.18 0 10-5 10-9s-2.82-9-10-9-10 5-10 9 2.82 9 10 9z"></path></svg>
       <h3 class="text-lg font-medium text-slate-300">Nenhuma partida armazenada</h3>
-      <p class="text-sm text-slate-500 max-w-md mx-auto mt-1">Cole dados na área de texto ou importe um arquivo .TXT/.JSON para visualizar os cards.</p>
+      <p class="text-sm text-slate-500 max-w-md mx-auto mt-1">As partidas do período são carregadas automaticamente. A importação manual permanece disponível apenas como recurso auxiliar.</p>
     </div>
 
   </main>
@@ -629,6 +629,8 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
       }
       if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
       const normalized = {};
+      if (Array.isArray(value.bookmakers)) normalized.bookmakers = value.bookmakers.filter(book => book && typeof book === 'object').map(book => ({ bookmaker: validText(book.bookmaker), simple: Array.isArray(book.simple) ? book.simple : [], combined: Array.isArray(book.combined) ? book.combined : [] }));
+      if (Array.isArray(value.warnings)) normalized.warnings = value.warnings.map(item => validText(item)).filter(Boolean);
       const fields = ['summary', 'recentForm', 'liveStatus', 'statistics', 'importantPoints', 'observations', 'over25Probability', 'over15Probability', 'bothTeamsToScore', 'expectedGoals', 'averageCorners', 'averageCards', 'conservativeMarkets'];
       fields.forEach(field => {
         const raw = value[field];
@@ -692,6 +694,31 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
 
     function getMatchDetails(matchId) { return matchesData.find(match => match.id === matchId) || permanentHistory.find(match => match.id === matchId) || null; }
 
+    function renderOddsSection(match) {
+      const section = document.createElement('div');
+      section.className = 'p-3 bg-slate-900/70 rounded-lg border border-amber-500/30 space-y-3';
+      const heading = document.createElement('div');
+      heading.className = 'flex items-center justify-between gap-2';
+      const title = document.createElement('span'); title.className = 'font-bold text-amber-300 block text-[11px] uppercase tracking-wider'; title.textContent = 'Odds e mercados disponíveis';
+      const status = document.createElement('span'); status.className = 'text-[10px] text-slate-400'; status.textContent = match.oddsStatus === 'available' ? 'Cache da partida' : (match.oddsStatus === 'not-supported-for-source' ? 'Fonte sem odds' : 'Não consultadas');
+      heading.append(title, status); section.appendChild(heading);
+      const odds = Array.isArray(match.odds) ? match.odds : [];
+      if (!odds.length) { const empty = document.createElement('p'); empty.className = 'text-xs text-slate-400'; empty.textContent = match.oddsStatus === 'daily-limit' ? 'Limite diário preservado. As odds não foram consultadas.' : 'Odds não disponíveis para esta partida ou fonte.'; section.appendChild(empty); return section; }
+      odds.forEach(bookmaker => {
+        const box = document.createElement('div'); box.className = 'rounded-lg border border-slate-700 bg-slate-800/70 p-2 space-y-2';
+        const name = document.createElement('div'); name.className = 'text-xs font-bold text-white'; name.textContent = bookmaker.bookmaker; box.appendChild(name);
+        bookmaker.markets.slice(0, 6).forEach(market => {
+          const row = document.createElement('div'); row.className = 'flex flex-wrap items-center gap-1.5';
+          const label = document.createElement('span'); label.className = 'text-[10px] text-slate-400 min-w-28'; label.textContent = market.market;
+          row.appendChild(label);
+          market.values.slice(0, 6).forEach(value => { const chip = document.createElement('span'); chip.className = 'px-1.5 py-1 rounded bg-amber-500/15 border border-amber-500/30 text-[10px] text-amber-200'; chip.textContent = `${value.label}: @${Number(value.odd).toFixed(2)}`; row.appendChild(chip); });
+          box.appendChild(row);
+        });
+        section.appendChild(box);
+      });
+      return section;
+    }
+
     function renderMatchModal(match) {
       if (!match) return;
       matchDetailsTitle.textContent = validText(match.title) || 'Detalhes da partida';
@@ -720,6 +747,7 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
         const apiStats = createDetailSection('Estatísticas da fonte', Object.entries(match.apiStats).slice(0, 30).map(([key, value]) => [key, typeof value === 'object' ? JSON.stringify(value) : value]));
         if (apiStats) matchDetailsBody.appendChild(apiStats);
       }
+      matchDetailsBody.appendChild(renderOddsSection(match));
       if (Array.isArray(match.stats100) && match.stats100.length) {
         const stats = document.createElement('div'); stats.className = 'p-3 bg-slate-800/90 rounded-lg border border-slate-700/80 space-y-2';
         const heading = document.createElement('span'); heading.className = 'font-bold text-indigo-300 block text-[11px] uppercase tracking-wider'; heading.textContent = 'Estatísticas de 100% dos jogos'; stats.appendChild(heading);
@@ -729,24 +757,31 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
       const aiSection = document.createElement('div'); aiSection.className = 'space-y-2';
       const aiHeading = document.createElement('span'); aiHeading.className = 'font-bold text-emerald-400 block text-[11px] uppercase tracking-wider'; aiHeading.textContent = 'Análise adicional da IA'; aiSection.appendChild(aiHeading);
       const aiContent = document.createElement('div'); renderAIAnalysis(aiContent, match.aiAnalysis); aiSection.appendChild(aiContent); matchDetailsBody.appendChild(aiSection);
+      if (match.betTicket) renderBetTicketSection(match);
     }
 
     async function enrichMatchDetails(match) {
-      if (!match || match.detailsLoaded || !validText(match.sourceId) || !validText(match.source)) return;
+      if (!match || !validText(match.sourceId) || !validText(match.source)) return;
+      if (match.detailsPromise) return match.detailsPromise;
+      if (match.detailsLoaded) return;
       match.detailsLoaded = true;
       const previous = matchDetailsSubtitle.textContent;
-      matchDetailsSubtitle.textContent = `${previous} · buscando detalhes da fonte...`;
-      try {
-        const response = await fetch(`/api/fixture-details?source=${encodeURIComponent(match.source)}&id=${encodeURIComponent(match.sourceId)}`, { headers: { Accept: 'application/json' } });
-        const payload = await response.json().catch(() => ({}));
-        if (response.ok && payload.success && payload.details) {
-          Object.assign(match, payload.details);
-          saveToLocalStorage();
-          renderMatchModal(match);
-        } else if (payload.error === 'API_FOOTBALL_DAILY_LIMIT') {
-          showToast('Limite diário da API-Football preservado; detalhes complementares não foram consultados.');
-        }
-      } catch { showToast('Detalhes complementares indisponíveis no momento.'); }
+      matchDetailsSubtitle.textContent = `${previous} · buscando detalhes, estatísticas e odds...`;
+      match.detailsPromise = (async () => {
+        try {
+          const response = await fetch(`/api/fixture-details?source=${encodeURIComponent(match.source)}&id=${encodeURIComponent(match.sourceId)}`, { headers: { Accept: 'application/json' } });
+          const payload = await response.json().catch(() => ({}));
+          if (response.ok && payload.success && payload.details) {
+            Object.assign(match, payload.details);
+            saveToLocalStorage();
+            renderMatchModal(match);
+          } else if (payload.error === 'API_FOOTBALL_DAILY_LIMIT') {
+            showToast('Limite diário da API-Football preservado; detalhes complementares não foram consultados.');
+          }
+        } catch { showToast('Detalhes complementares indisponíveis no momento.'); }
+        finally { delete match.detailsPromise; }
+      })();
+      return match.detailsPromise;
     }
 
     function openMatchModal(matchId, event) {
@@ -798,38 +833,53 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
         title: validText(match.title) || `${validText(match.homeTeam)} x ${validText(match.awayTeam)}`,
         dateTime: apiDateTimeToDisplay(match.dateTime),
         rawDateTime: match.dateTime || '',
+        parsedDate: match.dateTime || '',
         competition: validText(match.competition),
+        competitionLogo: validText(match.competitionLogo),
+        homeCrest: validText(match.homeCrest),
+        awayCrest: validText(match.awayCrest),
         info,
-        sugestao: '', odd: null, plus15: '', plus25: '', gols: null, escanteios: null, cartoes: null,
+        sugestao: match.sugestao || '', odd: validMetric(match.odd), plus15: match.plus15 || '', plus25: match.plus25 || '', gols: validMetric(match.gols), escanteios: validMetric(match.escanteios), cartoes: validMetric(match.cartoes),
         realGolsCasa: validMetric(score.home), realGolsFora: validMetric(score.away),
-        realEscCasa: null, realEscFora: null, realCartoesCasa: null, realCartoesFora: null,
-        prediction: {}, result: {}, evaluation: {}, aiAnalysis: match.aiAnalysis || null,
-        apiEvents: Array.isArray(match.events) ? match.events : [],
-        apiStats: match.stats || {}, sources: Array.isArray(match.sources) ? match.sources : []
+        realEscCasa: validMetric(match.realEscCasa), realEscFora: validMetric(match.realEscFora), realCartoesCasa: validMetric(match.realCartoesCasa), realCartoesFora: validMetric(match.realCartoesFora),
+        prediction: match.prediction || {}, result: match.result || {}, evaluation: match.evaluation || {}, aiAnalysis: match.aiAnalysis || null,
+        odds: Array.isArray(match.odds) ? match.odds : [], oddsStatus: match.oddsStatus || 'not-loaded', detailsLoaded: Boolean(match.detailsLoaded),
+        apiEvents: Array.isArray(match.events) ? match.events : (Array.isArray(match.apiEvents) ? match.apiEvents : []),
+        apiStats: match.stats || match.apiStats || {}, sources: Array.isArray(match.sources) ? match.sources : []
       };
     }
 
-    async function loadFixturesForDate(date = fixturesDateInput.value) {
+    function shiftDate(isoDate, amount) {
+      const date = new Date(`${isoDate}T12:00:00Z`);
+      date.setUTCDate(date.getUTCDate() + amount);
+      return date.toISOString().slice(0, 10);
+    }
+
+    async function loadFixturesForDate(date = fixturesDateInput.value, options = {}) {
       if (!date) return;
       loadFixturesBtn.disabled = true; refreshFixturesBtn.disabled = true;
-      fixturesStatusLabel.textContent = 'Carregando partidas e verificando as fontes...';
+      fixturesStatusLabel.textContent = options.preload ? 'Carregando automaticamente hoje, 7 dias anteriores e 7 dias seguintes...' : 'Atualizando partidas do período...';
+      const from = shiftDate(date, -7);
+      const to = shiftDate(date, 7);
       try {
-        const response = await fetch(`/api/fixtures?date=${encodeURIComponent(date)}`, { headers: { Accept: 'application/json' } });
+        const response = await fetch(`/api/fixtures?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { headers: { Accept: 'application/json' } });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload.success) throw new Error(payload.error || 'FIXTURES_UNAVAILABLE');
         const incoming = (payload.matches || []).map(apiMatchToCard);
-        matchesData = incoming;
-        permanentHistory = storage.mergeById([...permanentHistory, ...incoming]);
+        const previousById = new Map(matchesData.map(item => [item.id, item]));
+        matchesData = incoming.map(item => ({ ...previousById.get(item.id), ...item, aiAnalysis: previousById.get(item.id)?.aiAnalysis || item.aiAnalysis, odds: previousById.get(item.id)?.odds?.length ? previousById.get(item.id).odds : item.odds, detailsLoaded: previousById.get(item.id)?.detailsLoaded || item.detailsLoaded }));
+        permanentHistory = storage.mergeById([...permanentHistory, ...matchesData]);
         saveToLocalStorage();
+        selectedDateFilter = date === fixturesDateInput.value ? 'all' : selectedDateFilter;
         updateDateTabs(); renderCards();
         const meta = payload.meta || {};
-        fixturesStatusLabel.textContent = `${incoming.length} partida(s) encontrada(s) em ${date.split('-').reverse().join('/')}. Atualizado agora.`;
-        fixturesSourceBadge.textContent = `Principal: ${meta.primaryCount || 0} · Complementar: ${meta.secondaryCount || 0}${meta.secondaryUsed ? ' · API-Football utilizada' : ''}`;
-        if (!incoming.length) showToast('Nenhuma partida encontrada para esta data.');
+        fixturesStatusLabel.textContent = `${incoming.length} partida(s) pré-carregada(s) de ${from.split('-').reverse().join('/')} a ${to.split('-').reverse().join('/')}.`;
+        fixturesSourceBadge.textContent = `Principal: ${meta.primaryCount || 0} · Complementar: ${meta.secondaryCount || 0}${meta.secondaryUsed ? ' · API-Football utilizada' : ''} · Cache ativo`;
+        if (!incoming.length) showToast('Nenhuma partida encontrada no intervalo selecionado.');
       } catch (error) {
-        fixturesStatusLabel.textContent = 'Não foi possível carregar as partidas. Configure as chaves das APIs no Netlify.';
+        fixturesStatusLabel.textContent = 'Não foi possível carregar as partidas. Verifique as chaves das APIs no Netlify.';
         fixturesSourceBadge.textContent = 'Fontes indisponíveis';
-        showToast('Configure as chaves das APIs para carregar partidas.');
+        showToast('Não foi possível carregar as partidas.');
       } finally {
         loadFixturesBtn.disabled = false; refreshFixturesBtn.disabled = false;
       }
@@ -899,7 +949,7 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
         title: match.title, dateTime: match.dateTime, competition: match.competition,
         status: match.statusLabel || match.status, info: match.info,
         apiStats: match.apiStats || {}, apiEvents: match.apiEvents || [],
-        history: match.history || {}, score: { home: match.realGolsCasa, away: match.realGolsFora }
+        history: match.history || {}, odds: match.odds || [], score: { home: match.realGolsCasa, away: match.realGolsFora }
       }};
 
       try {
@@ -911,6 +961,37 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
       } catch (e) {
         showToast("Erro ao conectar à IA.");
       }
+    }
+
+    async function generateBetTicketIA(matchId, event) {
+      if (event) event.stopPropagation();
+      const match = getMatchDetails(matchId);
+      if (!match) return;
+      openMatchModal(matchId, event);
+      if (!Array.isArray(match.odds) || !match.odds.length) { await enrichMatchDetails(match); }
+      if (!Array.isArray(match.odds) || !match.odds.length) { showToast('Odds não disponíveis para esta partida.'); return; }
+      showToast('Montando bilhetes por casa de aposta...');
+      const ticketBox = document.createElement('div'); ticketBox.className = 'p-3 bg-indigo-950/50 rounded-lg border border-indigo-500/40 text-slate-200'; ticketBox.textContent = 'A IA está selecionando mercados reais por casa de aposta...'; matchDetailsBody.appendChild(ticketBox);
+      try {
+        const text = await callGeminiApi({ mode: 'bet-ticket', match: { title: match.title, dateTime: match.dateTime, competition: match.competition, apiStats: match.apiStats || {}, history: match.history || {}, odds: match.odds || [] } });
+        match.betTicket = normalizeAIResponse(text);
+        saveToLocalStorage();
+        ticketBox.remove();
+        renderBetTicketSection(match);
+        showToast('Bilhetes gerados com dados reais de odds.');
+      } catch (error) { ticketBox.textContent = 'Não foi possível gerar os bilhetes agora. Verifique a configuração do Gemini e tente novamente.'; ticketBox.className = 'p-3 bg-rose-950/50 rounded-lg border border-rose-500/40 text-rose-200'; }
+    }
+
+    function renderBetTicketSection(match) {
+      const ticket = match.betTicket;
+      if (!ticket) return;
+      const section = document.createElement('div'); section.className = 'p-3 bg-indigo-950/50 rounded-lg border border-indigo-500/40 space-y-3';
+      const title = document.createElement('span'); title.className = 'font-bold text-indigo-300 block text-[11px] uppercase tracking-wider'; title.textContent = 'Bilhetes sugeridos pela IA'; section.appendChild(title);
+      if (ticket.summary) { const p = document.createElement('p'); p.className = 'text-xs text-slate-200'; p.textContent = ticket.summary; section.appendChild(p); }
+      const bookmakers = Array.isArray(ticket.bookmakers) ? ticket.bookmakers : [];
+      bookmakers.forEach(book => { const box = document.createElement('div'); box.className = 'rounded-lg bg-slate-900/70 border border-slate-700 p-2 space-y-2'; const h = document.createElement('div'); h.className = 'font-bold text-white text-xs'; h.textContent = book.bookmaker || 'Casa não informada'; box.appendChild(h); [...(book.simple || []), ...(book.combined || [])].forEach(item => { const p = document.createElement('p'); p.className = 'text-[11px] text-slate-300'; p.textContent = `${item.market || 'Mercado'} — ${item.selection || 'Seleção'} @${item.odd || 'N/D'} · ${item.reason || ''}`; box.appendChild(p); }); section.appendChild(box); });
+      if (!bookmakers.length) { const p = document.createElement('p'); p.className = 'text-xs text-slate-400'; p.textContent = 'A IA não encontrou combinações válidas com as odds disponíveis.'; section.appendChild(p); }
+      matchDetailsBody.appendChild(section);
     }
 
     // Comparador de Confronto Direto via IA
@@ -1612,14 +1693,10 @@ Responda somente em JSON válido, com campos opcionais summary, recentForm, live
               </div>
 
               <div class="flex items-center gap-2 relative z-20">
-                <select class="status-select bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-300 focus:outline-none cursor-pointer">
-                  <option value="pending" ${m.status === 'pending' ? 'selected' : ''}>⏳ Pendente</option>
-                  <option value="live" ${m.status === 'live' ? 'selected' : ''}>● Ao Vivo</option>
-                  <option value="finished" ${m.status === 'finished' ? 'selected' : ''}>◼ Finalizada</option>
-                  <option value="green" ${m.status === 'green' ? 'selected' : ''}>✅ Green</option>
-                  <option value="red" ${m.status === 'red' ? 'selected' : ''}>❌ Red</option>
-                  <option value="void" ${m.status === 'void' ? 'selected' : ''}>⚪ Anulado</option>
-                </select>
+                <div class="flex items-center gap-1">
+                  <button title="Marcar aposta como Green" class="green-btn px-2 py-1 rounded border ${m.status === 'green' ? 'bg-emerald-600 text-white border-emerald-400' : 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60 hover:border-emerald-400'} text-[10px] font-extrabold transition-colors">Green</button>
+                  <button title="Marcar aposta como Red" class="red-btn px-2 py-1 rounded border ${m.status === 'red' ? 'bg-rose-600 text-white border-rose-400' : 'bg-rose-950/40 text-rose-300 border-rose-800/60 hover:border-rose-400'} text-[10px] font-extrabold transition-colors">Red</button>
+                </div>
 
                 <button title="Remover Partida" class="delete-btn text-slate-500 hover:text-rose-400 p-1 transition-colors text-xs">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
@@ -1627,15 +1704,17 @@ Responda somente em JSON válido, com campos opcionais summary, recentForm, live
               </div>
             </div>
 
-            <div class="flex items-center justify-between mt-1 relative z-20">
-              <h3 class="text-base font-bold text-white tracking-wide">${escapeHtml(m.title)}</h3>
-              ${isFinished && sumValid(m.realGolsCasa, m.realGolsFora) !== null ? `<span class="bg-slate-900 text-white font-black px-2 py-1 rounded-md border border-slate-600 shadow text-[10px]">FINALIZADO: ${formatNumber(m.realGolsCasa, 0)} x ${formatNumber(m.realGolsFora, 0)}</span>` : ''}
-              ${!isFinished ? `
-              <div class="flex gap-1 text-[11px]">
-                ${isValidValue(m.plus15) ? `<span class="px-1.5 py-0.5 rounded border ${getBadgeBg(m.plus15)} font-medium">+1.5: ${escapeHtml(m.plus15)}</span>` : ''}
-                ${isValidValue(m.plus25) ? `<span class="px-1.5 py-0.5 rounded border ${getBadgeBg(m.plus25)} font-medium">+2.5: ${escapeHtml(m.plus25)}</span>` : ''}
+            <div class="flex items-center justify-between mt-1 relative z-20 gap-3">
+              <div class="flex items-center gap-2 min-w-0">
+                ${m.competitionLogo ? `<img src="${escapeHtml(m.competitionLogo)}" alt="" class="w-5 h-5 object-contain rounded-full bg-white/90 p-0.5" onerror="this.style.display='none'">` : '<span class="w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-500/30"></span>'}
+                <div class="min-w-0"><span class="block text-[10px] text-slate-400 uppercase tracking-wider truncate">${escapeHtml(m.competition || 'Competição')}</span><h3 class="text-sm font-bold text-white tracking-wide truncate">${escapeHtml(m.title)}</h3></div>
               </div>
-              ` : ''}
+              ${isFinished && sumValid(m.realGolsCasa, m.realGolsFora) !== null ? `<span class="shrink-0 bg-slate-900 text-white font-black px-2 py-1 rounded-md border border-slate-600 shadow text-[10px]">${formatNumber(m.realGolsCasa, 0)} x ${formatNumber(m.realGolsFora, 0)}</span>` : `<div class="flex gap-1 text-[11px] shrink-0">${isValidValue(m.plus15) ? `<span class="px-1.5 py-0.5 rounded border ${getBadgeBg(m.plus15)} font-medium">+1.5 ${escapeHtml(m.plus15)}</span>` : ''}${isValidValue(m.plus25) ? `<span class="px-1.5 py-0.5 rounded border ${getBadgeBg(m.plus25)} font-medium">+2.5 ${escapeHtml(m.plus25)}</span>` : ''}</div>`}
+            </div>
+            <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mt-3 text-center">
+              <div class="min-w-0"><img src="${escapeHtml(m.homeCrest || '')}" alt="${escapeHtml(m.homeTeam || '')}" class="w-10 h-10 object-contain mx-auto mb-1" onerror="this.style.display='none'"><span class="block text-xs font-semibold text-slate-200 truncate">${escapeHtml(m.homeTeam || 'Mandante')}</span></div>
+              <span class="text-[11px] font-black text-slate-500">VS</span>
+              <div class="min-w-0"><img src="${escapeHtml(m.awayCrest || '')}" alt="${escapeHtml(m.awayTeam || '')}" class="w-10 h-10 object-contain mx-auto mb-1" onerror="this.style.display='none'"><span class="block text-xs font-semibold text-slate-200 truncate">${escapeHtml(m.awayTeam || 'Visitante')}</span></div>
             </div>
           </div>
 
@@ -1672,6 +1751,7 @@ Responda somente em JSON válido, com campos opcionais summary, recentForm, live
             <div class="flex items-center gap-2">
               <button class="compare-btn text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 hover:underline">Comparar</button>
               <button class="ia-single-btn text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-950/40 px-2 py-1 rounded border border-emerald-800/50 hover:border-emerald-500 transition-colors"><span>✨ IA</span></button>
+              <button class="ticket-ia-btn text-amber-300 hover:text-amber-200 font-bold flex items-center gap-1 bg-amber-950/40 px-2 py-1 rounded border border-amber-800/50 hover:border-amber-500 transition-colors"><span>🎟️ Bilhete IA</span></button>
             </div>
             <button class="open-details-btn text-slate-300 hover:text-white font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-700/60">Detalhes <span aria-hidden="true">↗</span></button>
           </div>
@@ -1683,9 +1763,9 @@ Responda somente em JSON válido, com campos opcionais summary, recentForm, live
         card.querySelector('.compare-btn').addEventListener('click', (e) => openCompareModal(m.id, e));
         card.querySelector('.ia-single-btn').addEventListener('click', (e) => analyzeSingleMatchIA(m.id, e));
         
-        const statusSelect = card.querySelector('.status-select');
-        statusSelect.addEventListener('change', (e) => changeMatchStatus(m.id, e.target.value, e));
-        statusSelect.addEventListener('click', (e) => e.stopPropagation());
+        card.querySelector('.green-btn').addEventListener('click', (e) => changeMatchStatus(m.id, 'green', e));
+        card.querySelector('.red-btn').addEventListener('click', (e) => changeMatchStatus(m.id, 'red', e));
+        card.querySelector('.ticket-ia-btn').addEventListener('click', (e) => generateBetTicketIA(m.id, e));
 
         card.querySelectorAll('.real-input').forEach(inp => {
           inp.addEventListener('change', (e) => updateMatchRealData(m.id, e.target.dataset.field, e.target.value));
@@ -1712,7 +1792,7 @@ Responda somente em JSON válido, com campos opcionais summary, recentForm, live
       updateDateTabs();
       renderHistoryItems();
       renderCards();
-      loadFixturesForDate();
+      loadFixturesForDate(fixturesDateInput.value, { preload: true });
     };
   </script>
 </body>

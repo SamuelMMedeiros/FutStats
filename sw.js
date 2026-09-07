@@ -1,4 +1,4 @@
-const CACHE_NAME = 'statscard-shell-v3';
+const CACHE_NAME = 'futstats-shell-v4';
 const APP_SHELL = ['./', './index.html', './manifest.json', './js/core.js', './js/storage.js', './js/parser.js', './js/statistics.js'];
 
 self.addEventListener('install', event => {
@@ -21,16 +21,13 @@ self.addEventListener('fetch', event => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/')) return;
 
   const isNavigation = request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('/index.html');
   if (isNavigation) {
     event.respondWith(
       fetch(request)
-        .then(response => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
-          return response;
-        })
+        .then(response => { const copy = response.clone(); caches.open(CACHE_NAME).then(cache => cache.put(request, copy)); return response; })
         .catch(() => caches.match(request).then(cached => cached || caches.match('./index.html')))
     );
     return;
@@ -38,9 +35,7 @@ self.addEventListener('fetch', event => {
 
   event.respondWith(
     caches.match(request).then(cached => cached || fetch(request).then(response => {
-      const copy = response.clone();
-      caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
-      return response;
+      const copy = response.clone(); caches.open(CACHE_NAME).then(cache => cache.put(request, copy)); return response;
     }))
   );
 });
