@@ -109,32 +109,37 @@
   </div>
 
   <!-- Cabeçalho Principal -->
-  <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-md">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <div class="p-2 bg-indigo-600 rounded-lg text-white">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
-        </div>
-        <h1 class="text-xl font-bold tracking-wide text-white">StatsCard <span class="text-indigo-400 text-sm font-normal">| Analisador Tático & IA</span></h1>
+  <header class="sticky top-0 z-30 border-b border-slate-800/90 bg-slate-950/95 backdrop-blur-xl shadow-[0_1px_14px_rgba(0,0,0,0.45)]">
+    <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="p-2 bg-rose-600 rounded-xl text-white shadow-lg shadow-rose-950/40"><span class="text-lg font-black">S</span></div>
+        <div class="min-w-0"><h1 class="text-lg sm:text-xl font-extrabold tracking-tight text-white truncate">Stats<span class="text-rose-400">.AI</span></h1><span class="block text-[10px] uppercase tracking-[0.18em] text-slate-500">Inteligência analítica de futebol</span></div>
       </div>
-      <div class="flex items-center gap-2">
-        <button id="toggle-history-btn" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 border border-slate-600">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          <span class="hidden sm:inline">Histórico</span>
-        </button>
-        <button id="install-pwa-btn" class="hidden text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 py-2 rounded-lg transition-colors items-center gap-1.5 shadow">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-          <span>Instalar</span>
-        </button>
-        <button id="toggle-input-btn" class="text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-3.5 py-2 rounded-lg transition-colors flex items-center gap-1.5 shadow">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-          <span class="hidden sm:inline">Importar</span>
-        </button>
+      <nav id="score-primary-nav" class="order-3 lg:order-2 w-full lg:w-auto flex items-center gap-1 overflow-x-auto rounded-xl bg-slate-900/80 p-1" aria-label="Navegação principal">
+        <button data-score-view="today" class="whitespace-nowrap rounded-lg bg-slate-700 px-3 py-2 text-xs font-bold text-white shadow-inner transition-colors">Jogos de hoje</button>
+        <button data-score-view="live" class="whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition-colors">Ao vivo <span id="score-live-count" class="ml-1 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px]">0</span></button>
+        <button data-score-view="ai" class="whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition-colors">Palpites IA <span id="score-ai-count" class="ml-1 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px]">0</span></button>
+        <button data-score-view="odds" class="whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition-colors">Comparador de odds</button>
+        <button data-score-view="leagues" class="whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition-colors">Ligas e tabelas</button>
+      </nav>
+      <div class="order-2 lg:order-3 flex items-center gap-2">
+        <div class="hidden xl:flex items-center gap-1 rounded-lg bg-slate-900 px-2 py-1"><button data-score-date="yesterday" class="px-2 py-1 text-[11px] text-slate-400 hover:text-white">Ontem</button><button data-score-date="today" class="rounded bg-slate-700 px-2 py-1 text-[11px] font-bold text-white">Hoje</button><button data-score-date="tomorrow" class="px-2 py-1 text-[11px] text-slate-400 hover:text-white">Amanhã</button></div>
+        <button id="toggle-history-btn" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold px-3 py-2 rounded-lg transition-colors border border-slate-700">Histórico</button>
+        <button id="install-pwa-btn" class="hidden text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg transition-colors items-center gap-1.5 shadow">Instalar</button>
+        <button id="toggle-input-btn" class="text-xs bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-2 rounded-lg transition-colors shadow-lg shadow-rose-950/30">+ Importar</button>
       </div>
     </div>
+    <div class="border-t border-slate-800/80 bg-slate-900/70"><div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-4 overflow-x-auto"><span class="text-[10px] uppercase tracking-wider font-bold text-slate-500 whitespace-nowrap">Ligas top</span><button data-score-league="brasileirao" class="text-xs text-slate-300 hover:text-white whitespace-nowrap">Brasileirão Betano</button><button data-score-league="premier-league" class="text-xs text-slate-300 hover:text-white whitespace-nowrap">Premier League</button><button data-score-league="champions" class="text-xs text-slate-300 hover:text-white whitespace-nowrap">Champions League</button><button data-score-league="laliga" class="text-xs text-slate-300 hover:text-white whitespace-nowrap">LaLiga</button><button data-score-league="serie-a" class="text-xs text-slate-300 hover:text-white whitespace-nowrap">Serie A</button><button data-score-league="libertadores" class="text-xs text-slate-300 hover:text-white whitespace-nowrap">Libertadores</button></div></div>
   </header>
 
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+
+    <section id="score-intelligence-strip" class="rounded-2xl border border-slate-800 bg-slate-900/80 p-3 shadow-xl">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2"><span class="relative flex h-2.5 w-2.5"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70"></span><span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400"></span></span><span class="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-300">Score engine ativo</span><span id="score-coverage-label" class="text-xs text-slate-400">Aguardando snapshot</span></div>
+        <div class="grid grid-cols-3 gap-2 text-center sm:gap-4"><div><span id="score-fixture-count" class="block text-base font-black tabular-nums text-white">0</span><span class="text-[9px] uppercase tracking-wider text-slate-500">partidas</span></div><div><span id="score-live-kpi" class="block text-base font-black tabular-nums text-rose-300">0</span><span class="text-[9px] uppercase tracking-wider text-slate-500">ao vivo</span></div><div><span id="score-ai-kpi" class="block text-base font-black tabular-nums text-cyan-300">0</span><span class="text-[9px] uppercase tracking-wider text-slate-500">palpites</span></div></div>
+      </div>
+    </section>
 
     <!-- Painel de Relatório de Desempenho e ROI -->
     <section class="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-xl grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
@@ -605,7 +610,7 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
       const normalized = {};
       if (Array.isArray(value.bookmakers)) normalized.bookmakers = value.bookmakers.filter(book => book && typeof book === 'object').map(book => ({ bookmaker: validText(book.bookmaker), simple: Array.isArray(book.simple) ? book.simple : [], combined: Array.isArray(book.combined) ? book.combined : [] }));
       if (Array.isArray(value.warnings)) normalized.warnings = value.warnings.map(item => validText(item)).filter(Boolean);
-      const fields = ['summary', 'recentForm', 'liveStatus', 'statistics', 'importantPoints', 'observations', 'over25Probability', 'over15Probability', 'bothTeamsToScore', 'expectedGoals', 'averageCorners', 'averageCards', 'conservativeMarkets'];
+      const fields = ['summary', 'recentForm', 'liveStatus', 'statistics', 'importantPoints', 'observations', 'over25Probability', 'over15Probability', 'bothTeamsToScore', 'expectedGoals', 'averageCorners', 'averageCards', 'conservativeMarkets', 'confidence', 'market', 'reason', 'riskProfile', 'expectedValue', 'fairOdd', 'edge', 'recommendedAction', 'ticketId', 'totalCombinedOdd', 'potentialPayout'];
       fields.forEach(field => {
         const raw = value[field];
         if (Array.isArray(raw)) {
@@ -624,7 +629,7 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
     function renderAIAnalysis(container, response) {
       container.replaceChildren();
       const data = normalizeAIResponse(response);
-      const labels = { summary: 'Resumo', recentForm: 'Forma recente', liveStatus: 'Situação atual', statistics: 'Estatísticas relevantes', importantPoints: 'Pontos importantes', observations: 'Observações', over25Probability: 'Probabilidade +2,5', over15Probability: 'Probabilidade +1,5', bothTeamsToScore: 'Ambas marcam', expectedGoals: 'Gols esperados', averageCorners: 'Média de escanteios', averageCards: 'Média de cartões', conservativeMarkets: 'Mercados conservadores' };
+      const labels = { summary: 'Resumo', recentForm: 'Forma recente', liveStatus: 'Situação atual', statistics: 'Estatísticas relevantes', importantPoints: 'Pontos importantes', observations: 'Observações', over25Probability: 'Probabilidade +2,5', over15Probability: 'Probabilidade +1,5', bothTeamsToScore: 'Ambas marcam', expectedGoals: 'Gols esperados', averageCorners: 'Média de escanteios', averageCards: 'Média de cartões', conservativeMarkets: 'Mercados conservadores', confidence: 'Confiança IA', market: 'Mercado sugerido', reason: 'Justificativa do modelo', riskProfile: 'Perfil de risco', expectedValue: 'Valor esperado', fairOdd: 'Odd justa', edge: 'Margem estatística', recommendedAction: 'Ação recomendada', ticketId: 'ID do bilhete', totalCombinedOdd: 'Odd combinada', potentialPayout: 'Retorno potencial' };
       Object.entries(labels).forEach(([key, label]) => {
         const value = data[key];
         if (!isValidValue(value) || (Array.isArray(value) && value.length === 0)) return;
@@ -639,6 +644,32 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
         section.append(heading, content);
         container.appendChild(section);
       });
+      if (Array.isArray(data.bookmakers) && data.bookmakers.length) {
+        const ticketSection = document.createElement('div');
+        ticketSection.className = 'space-y-2 rounded-xl border border-rose-500/30 bg-slate-950/60 p-3';
+        const ticketHeading = document.createElement('span');
+        ticketHeading.className = 'block text-[11px] font-black uppercase tracking-wider text-rose-300';
+        ticketHeading.textContent = 'Bilhetes por casa de aposta';
+        ticketSection.appendChild(ticketHeading);
+        data.bookmakers.forEach(bookmaker => {
+          const box = document.createElement('div');
+          box.className = 'rounded-lg border border-slate-700 bg-slate-900/80 p-2';
+          const name = document.createElement('div');
+          name.className = 'mb-1 text-xs font-bold text-white';
+          name.textContent = bookmaker.bookmaker || 'Casa não identificada';
+          box.appendChild(name);
+          [...(bookmaker.simple || []).slice(0, 3), ...(bookmaker.combined || []).slice(0, 3)].forEach(selection => {
+            const item = document.createElement('div');
+            item.className = 'border-t border-slate-800 py-1 text-[11px] text-slate-300';
+            const market = selection?.market || selection?.selection || selection?.label || 'Mercado';
+            const odd = Number(selection?.odd);
+            item.textContent = `${market}${Number.isFinite(odd) ? ` · @${odd.toFixed(2)}` : ''}${selection?.confidence ? ` · ${selection.confidence}` : ''}${selection?.reason ? ` — ${selection.reason}` : ''}`;
+            box.appendChild(item);
+          });
+          ticketSection.appendChild(box);
+        });
+        container.appendChild(ticketSection);
+      }
       if (!container.childElementCount) {
         const empty = document.createElement('p');
         empty.className = 'text-slate-400 italic';
@@ -1758,6 +1789,11 @@ Apresente em formato limpo:
 
         cardsContainer.appendChild(card);
       });
+      if (window.ScoreShell) {
+        const liveTotal = visibleMatches.filter(match => core.getMatchStatus(match) === 'live').length;
+        const aiTotal = matchesData.filter(match => match.aiAnalysis).length;
+        window.ScoreShell.sync({ total: visibleMatches.length, live: liveTotal, ai: aiTotal, coverage: preloadWindow.from && preloadWindow.to ? `Snapshot ${preloadWindow.from} → ${preloadWindow.to}` : 'Snapshot local' });
+      }
     }
 
     window.onload = function() {
@@ -1770,6 +1806,54 @@ Apresente em formato limpo:
       renderCards();
       loadFixturesForDate(fixturesDateInput.value, { preload: true });
     };
+
+    window.addEventListener('score:view', (event) => {
+      const view = event.detail?.view;
+      if (view === 'today') {
+        selectedDateFilter = localDateString();
+        filterStatus.value = '';
+        renderCards();
+      } else if (view === 'live') {
+        selectedDateFilter = 'all';
+        filterStatus.value = 'live';
+        renderCards();
+      } else if (view === 'ai') {
+        selectedDateFilter = 'all';
+        filterStatus.value = '';
+        const aiMatches = matchesData.filter(match => match.aiAnalysis);
+        if (aiMatches.length) {
+          selectedDateFilter = 'all';
+          renderCards();
+          openMatchModal(aiMatches[0].id);
+        } else {
+          renderCards();
+          showToast('Use o botão IA de um card para gerar o primeiro palpite.');
+        }
+      } else if (view === 'odds') {
+        selectedDateFilter = 'all';
+        filterStatus.value = '';
+        renderCards();
+        const oddsMatch = matchesData.find(match => Array.isArray(match.odds) && match.odds.length);
+        if (oddsMatch) openMatchModal(oddsMatch.id);
+        else showToast('As odds serão consultadas ao abrir uma partida.');
+      } else if (view === 'leagues') {
+        selectedDateFilter = 'all';
+        filterStatus.value = '';
+        renderCards();
+        document.querySelector('#cards-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+
+    window.addEventListener('score:date', (event) => {
+      const value = event.detail?.value;
+      const delta = value === 'yesterday' ? -1 : value === 'tomorrow' ? 1 : 0;
+      const base = new Date(`${localDateString()}T12:00:00Z`);
+      base.setUTCDate(base.getUTCDate() + delta);
+      const date = delta ? base.toISOString().slice(0, 10) : localDateString();
+      fixturesDateInput.value = date;
+      loadFixturesForDate(date);
+    });
   </script>
+  <script src="js/score-shell.js"></script>
 </body>
 </html>

@@ -11,7 +11,7 @@ function safe(value, limit = 2400) {
 }
 
 function buildMatchPrompt(match) {
-  return `Você é uma especialista esportiva em futebol e análise estatística responsável. Analise somente a partida indicada e use exclusivamente os dados fornecidos. Nunca invente estatísticas, odds, mercados, casas, lesões, escalações ou confrontos. Quando um dado não existir, retorne null, lista vazia ou explique que não está disponível. Não prometa acerto.
+  return `Você é uma especialista esportiva em futebol e análise estatística responsável. Analise somente a partida indicada e use exclusivamente os dados fornecidos. Nunca invente estatísticas, odds, mercados, casas, lesões, escalações ou confrontos. Quando um dado não existir, retorne null, lista vazia ou explique que não está disponível. Não prometa acerto. Organize a resposta para o modelo de palpites do Score.AI, separando probabilidade qualitativa, justificativa, confiança e limitações.
 
 Partida: ${safe(match.title)}
 Data e horário: ${safe(match.dateTime)}
@@ -26,7 +26,11 @@ Gere uma análise objetiva com probabilidades qualitativas apenas entre baixa, m
 }
 
 function buildTicketPrompt(match) {
-  return `Você é uma analista de futebol responsável por organizar bilhetes com mercados reais. Não invente odds, casas ou mercados. Use somente as odds fornecidas. Para cada casa de aposta encontrada, monte um bilhete simples e, quando houver dados suficientes, uma opção combinada conservadora. Cada seleção precisa conter bookmaker, mercado, seleção, odd e justificativa curta. Não inclua seleção sem odd real. Retorne JSON válido exatamente com: summary (string), bookmakers (array de objetos com bookmaker, simple (array), combined (array)), warnings (array de strings). Cada item de aposta deve conter market, selection, odd, confidence e reason. Deixe arrays vazios quando não houver dados.
+  return `Você é a analista principal do módulo Score.AI. Gere um modelo de palpites responsável, verificável e baseado somente nos dados recebidos. Não invente odds, casas, mercados, estatísticas, lesões ou histórico. Se um dado estiver ausente, use null, lista vazia ou explique a limitação. Nunca prometa acerto e inclua uma advertência de jogo responsável.
+
+Responda SOMENTE JSON válido com este contrato: summary (string), confidence (string: baixa|média|alta ou percentual disponível), market (string), reason (string), riskProfile (string: conservador|moderado|ousado), expectedValue (string ou null), fairOdd (number ou null), edge (string ou null), over25Probability (string), over15Probability (string), bothTeamsToScore (string), expectedGoals (string ou null), averageCorners (string ou null), averageCards (string ou null), conservativeMarkets (array de strings), bookmakers (array). Cada bookmaker deve conter bookmaker, simple (array) e combined (array). Cada seleção deve conter market, selection, odd, confidence e reason. Inclua somente seleções cuja odd exista no payload. Inclua warnings (array de strings) para dados insuficientes ou mercados não cobertos.
+
+Para o perfil conservador, prefira +1,5 gols, dupla chance ou ambas marcam somente quando os dados suportarem. Para moderado e ousado, use mercados reais adicionais disponíveis, mas nunca crie um mercado. Faça a seleção por casa de aposta quando a mesma seleção tiver odds diferentes, preservando o maior valor real e informando a casa.
 
 Partida: ${safe(match.title)}
 Data: ${safe(match.dateTime)}
