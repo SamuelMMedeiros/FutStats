@@ -51,16 +51,24 @@ export default async function gemini(req) {
 
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 30000);
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
       method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.15, maxOutputTokens: 3000, ...(structured ? { responseMimeType: 'application/json' } : {}) } })
+      body: JSON.stringify({
+        model: GEMINI_MODEL,
+        input: prompt,
+        store: false,
+        generation_config: { max_output_tokens: 3000, thinking_level: 'low' },
+        ...(structured ? { response_format: { type: 'text', mime_type: 'application/json' } } : {})
+      })
     });
     const data = await response.json().catch(() => ({}));
     const upstreamCode = data?.error?.status || data?.error?.code || null;
     if (response.status === 401 || response.status === 403) return jsonResponse(502, { success: false, error: 'AI_AUTH_FAILED', message: 'Não foi possível autenticar a IA.', upstreamCode });
     if (response.status === 429) return jsonResponse(429, { success: false, error: 'AI_RATE_LIMIT', message: 'Limite temporário de requisições atingido.', upstreamCode });
     if (!response.ok) return jsonResponse(502, { success: false, error: 'AI_UNAVAILABLE', message: 'Não foi possível consultar a IA.', upstreamCode, upstreamMessage: safe(data?.error?.message, 300) });
-    const text = data?.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim();
+    const text = Array.isArray(data?.steps)
+      ? data.steps.filter(step => step?.type === 'model_output').flatMap(step => Array.isArray(step.content) ? step.content : []).map(part => part?.text || '').join('').trim()
+      : (typeof data?.output_text === 'string' ? data.output_text.trim() : '');
     if (!text) return jsonResponse(502, { success: false, error: 'AI_EMPTY_RESPONSE', message: 'A IA retornou uma resposta vazia.' });
     return jsonResponse(200, { success: true, text, structured, model: GEMINI_MODEL });
   } catch (error) {
