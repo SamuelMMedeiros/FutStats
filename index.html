@@ -1747,7 +1747,8 @@ Apresente em formato limpo:
         const checkbox = card.querySelector('.multi-checkbox');
         checkbox.addEventListener('click', (e) => toggleMultiSelect(m.id, e));
 
-        card.querySelector('.open-details-btn').addEventListener('click', (e) => openMatchModal(m.id, e));
+        const openDetailsBtn = card.querySelector('.open-details-btn');
+        if (openDetailsBtn) openDetailsBtn.addEventListener('click', (e) => openMatchModal(m.id, e));
         card.addEventListener('click', (e) => { if (!e.target.closest('button, input, select, textarea, a')) openMatchModal(m.id, e); });
         card.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && document.activeElement === card) { e.preventDefault(); openMatchModal(m.id, e); } });
 
