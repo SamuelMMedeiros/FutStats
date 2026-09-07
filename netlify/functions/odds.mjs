@@ -3,7 +3,7 @@ const DEFAULT_ODDSPAPI_BOOKMAKERS = ['1xbet', 'bet365', 'betano', 'betfair', 'es
 const memoryCache = new Map();
 
 function json(status, body, headers = {}) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=300, stale-while-revalidate=1800', ...headers } });
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store, no-cache, must-revalidate', ...headers } });
 }
 function validDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : null; }
 function text(value) { return value == null ? '' : String(value).trim(); }
