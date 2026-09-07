@@ -16,7 +16,7 @@ function validDate(value) {
 function text(value) { return value === undefined || value === null ? '' : String(value).trim(); }
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 function isoLocalDate(date) { return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date); }
-function dateKey(start, end) { return `fixtures:${start}:${end}`; }
+function dateKey(start, end) { return `fixtures-v2:${start}:${end}`; }
 function addDays(iso, amount) { const date = new Date(`${iso}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + amount); return isoLocalDate(date); }
 function dateChunks(start, end, maxDays = 7) {
   const chunks = []; let cursor = start;
