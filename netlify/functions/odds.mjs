@@ -8,11 +8,12 @@ function json(status, body, headers = {}) {
 function validDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : null; }
 function text(value) { return value == null ? '' : String(value).trim(); }
 function listEnv(name, fallback) { const value = text(Netlify.env.get(name)); return value ? value.split(',').map(item => item.trim()).filter(Boolean) : fallback; }
+function oddsTimestamp(date) { return `${date.toISOString().slice(0, 19)}Z`; }
 function dayBounds(date) {
-  // America/Sao_Paulo is UTC-03:00. The Odds API validates these filters most reliably in UTC.
+  // America/Sao_Paulo is UTC-03:00. The Odds API requires second precision without milliseconds.
   const start = new Date(`${date}T03:00:00.000Z`);
-  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
-  return { from: start.toISOString(), to: end.toISOString() };
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1000);
+  return { from: oddsTimestamp(start), to: oddsTimestamp(end) };
 }
 function cacheKey(date, sports, regions, markets) { return `odds-v2:${date}:${sports.join(',')}:${regions.join(',')}:${markets.join(',')}`; }
 function normalizeTeam(value) { return text(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
