@@ -55,10 +55,11 @@ export default async function gemini(req) {
       method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.15, maxOutputTokens: 3000, ...(structured ? { responseMimeType: 'application/json' } : {}) } })
     });
-    if (response.status === 401 || response.status === 403) return jsonResponse(502, { success: false, error: 'AI_AUTH_FAILED', message: 'Não foi possível autenticar a IA.' });
-    if (response.status === 429) return jsonResponse(429, { success: false, error: 'AI_RATE_LIMIT', message: 'Limite temporário de requisições atingido.' });
-    if (!response.ok) return jsonResponse(502, { success: false, error: 'AI_UNAVAILABLE', message: 'Não foi possível consultar a IA.' });
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
+    const upstreamCode = data?.error?.status || data?.error?.code || null;
+    if (response.status === 401 || response.status === 403) return jsonResponse(502, { success: false, error: 'AI_AUTH_FAILED', message: 'Não foi possível autenticar a IA.', upstreamCode });
+    if (response.status === 429) return jsonResponse(429, { success: false, error: 'AI_RATE_LIMIT', message: 'Limite temporário de requisições atingido.', upstreamCode });
+    if (!response.ok) return jsonResponse(502, { success: false, error: 'AI_UNAVAILABLE', message: 'Não foi possível consultar a IA.', upstreamCode, upstreamMessage: safe(data?.error?.message, 300) });
     const text = data?.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim();
     if (!text) return jsonResponse(502, { success: false, error: 'AI_EMPTY_RESPONSE', message: 'A IA retornou uma resposta vazia.' });
     return jsonResponse(200, { success: true, text, structured, model: GEMINI_MODEL });
