@@ -906,7 +906,9 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
         fixturesStatusLabel.textContent = `${visibleCount} partida(s) exibida(s) em ${date.split('-').reverse().join('/')}; dados de ${from.split('-').reverse().join('/')} a ${to.split('-').reverse().join('/')} já estão em cache.`;
         if (!incoming.length) showToast('Nenhuma partida encontrada no intervalo selecionado.');
       } catch (error) {
-        fixturesStatusLabel.textContent = 'Não foi possível carregar as partidas. Verifique as fontes configuradas no servidor.';
+        console.error('[FutStats] Falha ao carregar/renderizar partidas', error);
+        const detail = error?.message ? ` (${error.message})` : '';
+        fixturesStatusLabel.textContent = `Não foi possível carregar as partidas. Verifique as fontes configuradas no servidor.${detail}`;
         showToast('Não foi possível carregar as partidas.');
       } finally {
         refreshFixturesBtn.disabled = false;
