@@ -127,7 +127,8 @@ async function fetchOddsPapi(date, apiKey) {
       const bookmaker = bookmakers[index];
       if (index > 0) await new Promise(resolve => setTimeout(resolve, 1100));
       const oddsUrl = new URL('https://api.oddspapi.io/v4/odds-by-tournaments');
-      oddsUrl.search = new URLSearchParams({ apiKey, tournamentIds: tournamentIds.join(','), bookmaker, language: 'en', verbosity: '3', oddsFormat: 'decimal' }).toString();
+      const bookmakerTournamentIds = bookmaker.includes('betfair') ? tournamentIds.slice(0, 3) : tournamentIds;
+      oddsUrl.search = new URLSearchParams({ apiKey, tournamentIds: bookmakerTournamentIds.join(','), bookmaker, language: 'en', verbosity: '3', oddsFormat: 'decimal' }).toString();
       try {
         const oddsResult = await fetchJson(oddsUrl);
         const rows = Array.isArray(oddsResult.body) ? oddsResult.body : (oddsResult.body && typeof oddsResult.body === 'object' ? [oddsResult.body] : []);
