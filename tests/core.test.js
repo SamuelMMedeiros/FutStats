@@ -1,6 +1,6 @@
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const vm = require('node:vm');
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
 const context = { window: {}, console, Intl, Date, Set, Map, JSON, Number, String, Math, Object, Array, parseFloat, isNaN };
 context.window = context;
 vm.createContext(context);

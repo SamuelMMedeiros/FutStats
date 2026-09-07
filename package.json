@@ -1,0 +1,16 @@
+{
+  "name": "futstats",
+  "version": "1.0.0",
+  "description": "StatsCard - Analisador Tático e IA",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "node --check server.js",
+    "test": "node tests/core.test.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.21.0",
+    "express": "^4.21.2"
+  }
+}

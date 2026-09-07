@@ -1,0 +1,8 @@
+{
+  "name": "StatsCard - Analisador Tático e IA",
+  "description": "Analisador tático de futebol com estatísticas, palpites com IA Gemini e comparador de odds",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
