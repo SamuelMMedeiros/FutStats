@@ -1,6 +1,7 @@
 const TZ = 'America/Sao_Paulo';
 const DEFAULT_DAILY_BUDGET = 80;
 const memoryCache = new Map();
+const teamMemoryCache = new Map();
 
 function json(status, body, headers = {}) {
   return new Response(JSON.stringify(body), {
@@ -16,7 +17,8 @@ function validDate(value) {
 function text(value) { return value === undefined || value === null ? '' : String(value).trim(); }
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 function isoLocalDate(date) { return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date); }
-function dateKey(start, end) { return `fixtures-v3:${start}:${end}`; }
+function dateKey(start, end) { return `fixtures-v4:${start}:${end}`; }
+function teamCacheKey(name) { return `thesportsdb-team-v1:${text(name).toLowerCase().replace(/[^a-z0-9]+/gi, '-')}`; }
 function addDays(iso, amount) { const date = new Date(`${iso}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + amount); return isoLocalDate(date); }
 function dateChunks(start, end, maxDays = 7) {
   const chunks = []; let cursor = start;
@@ -111,9 +113,56 @@ async function writeSupabaseCache(start, end, payload) {
   if (!url || !key) return;
   await fetch(`${url}/rest/v1/matches_cache?on_conflict=cache_key`, {
     method: 'POST', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify({ cache_key: dateKey(start, end), event_date: start, payload, source: 'football-data.org+api-football', fetched_at: new Date().toISOString(), expires_at: new Date(Date.now() + 120000).toISOString() }),
+    body: JSON.stringify({ cache_key: dateKey(start, end), event_date: start, payload, source: 'football-data.org+api-football+thesportsdb', fetched_at: new Date().toISOString(), expires_at: new Date(Date.now() + 120000).toISOString() }),
     signal: AbortSignal.timeout(8000)
   }).catch(() => null);
+}
+async function readTeamCache(name) {
+  const key = teamCacheKey(name);
+  const memory = teamMemoryCache.get(key);
+  if (memory && memory.expiresAt > Date.now()) return memory.payload;
+  const url = Netlify.env.get('SUPABASE_URL'); const secret = Netlify.env.get('SUPABASE_KEY');
+  if (!url || !secret) return null;
+  const response = await fetch(`${url}/rest/v1/matches_cache?select=payload,expires_at&cache_key=eq.${encodeURIComponent(key)}&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&limit=1`, { headers: { apikey: secret, Authorization: `Bearer ${secret}` }, signal: AbortSignal.timeout(8000) });
+  if (!response.ok) return null;
+  const rows = await response.json().catch(() => []);
+  const payload = rows?.[0]?.payload || null;
+  if (payload) teamMemoryCache.set(key, { payload, expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 });
+  return payload;
+}
+async function writeTeamCache(name, payload) {
+  const url = Netlify.env.get('SUPABASE_URL'); const secret = Netlify.env.get('SUPABASE_KEY');
+  if (!url || !secret || !payload) return;
+  const key = teamCacheKey(name);
+  teamMemoryCache.set(key, { payload, expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 });
+  await fetch(`${url}/rest/v1/matches_cache?on_conflict=cache_key`, { method: 'POST', headers: { apikey: secret, Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ cache_key: key, event_date: isoLocalDate(new Date()), payload, source: 'thesportsdb-team', fetched_at: new Date().toISOString(), expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() }), signal: AbortSignal.timeout(8000) }).catch(() => null);
+}
+async function enrichWithTheSportsDb(matches) {
+  const apiKey = text(Netlify.env.get('THESPORTSDB_API_KEY') || '123');
+  const candidates = new Map();
+  matches.forEach(match => {
+    if (!text(match.homeCrest)) candidates.set(text(match.homeTeam), 'home');
+    if (!text(match.awayCrest)) candidates.set(text(match.awayTeam), 'away');
+  });
+  const unresolved = [];
+  const resolved = new Map();
+  for (const name of candidates.keys()) {
+    const cached = await readTeamCache(name);
+    if (cached) resolved.set(name, cached);
+    else unresolved.push(name);
+  }
+  const maxRequests = Math.max(0, Number(Netlify.env.get('THESPORTSDB_DAILY_TEAM_LOOKUPS') || 20));
+  for (const name of unresolved.slice(0, maxRequests)) {
+    try {
+      const data = await fetchJson(`https://www.thesportsdb.com/api/v1/json/${encodeURIComponent(apiKey)}/searchteams.php?t=${encodeURIComponent(name)}`);
+      const team = Array.isArray(data?.teams) ? data.teams[0] : null;
+      if (team) { const payload = { badge: text(team.strTeamBadge || team.strTeamLogo), logo: text(team.strTeamLogo), name: text(team.strTeam), league: text(team.strLeague), country: text(team.strCountry) }; resolved.set(name, payload); await writeTeamCache(name, payload); }
+    } catch { /* TheSportsDB is auxiliary; existing sources remain authoritative. */ }
+  }
+  return matches.map(match => {
+    const home = resolved.get(text(match.homeTeam)); const away = resolved.get(text(match.awayTeam));
+    return { ...match, homeCrest: text(match.homeCrest) || text(home?.badge), awayCrest: text(match.awayCrest) || text(away?.badge), sources: [...new Set([...(match.sources || []), home || away ? 'thesportsdb' : ''])].filter(Boolean), thesportsdb: { home: home || null, away: away || null } };
+  });
 }
 
 export default async function fixtures(req) {
@@ -152,8 +201,9 @@ export default async function fixtures(req) {
       });
     } catch (error) { secondaryError = error.message; }
   }
-  const matches = mergeMatches(primary, secondary);
-  const body = { success: true, date: start === end ? start : null, from: start, to: end, timezone: TZ, matches, meta: { primary: 'football-data.org', primaryCount: primary.length, secondary: 'api-football', secondaryUsed, secondaryCount: secondary.length, primaryError, secondaryError, fetchedAt: new Date().toISOString() } };
+  const merged = mergeMatches(primary, secondary);
+  const matches = await enrichWithTheSportsDb(merged);
+  const body = { success: true, date: start === end ? start : null, from: start, to: end, timezone: TZ, matches, meta: { primary: 'football-data.org', primaryCount: primary.length, secondary: 'api-football', secondaryUsed, secondaryCount: secondary.length, auxiliary: 'thesportsdb', primaryError, secondaryError, fetchedAt: new Date().toISOString() } };
   memoryCache.set(key, { expiresAt: Date.now() + 120000, body }); await writeSupabaseCache(start, end, body); return json(200, body);
 }
 
