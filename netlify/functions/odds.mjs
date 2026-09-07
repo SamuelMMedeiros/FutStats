@@ -1,6 +1,16 @@
 const DEFAULT_SPORT_KEYS = ['soccer_brazil_campeonato', 'soccer_epl', 'soccer_spain_la_liga', 'soccer_germany_bundesliga', 'soccer_italy_serie_a'];
-const DEFAULT_ODDSPAPI_BOOKMAKERS = ['1xbet', 'bet365', 'betano', 'betfair', 'estrelabet', 'kto', 'sportingbet', 'superbet'];
+const TARGET_BOOKMAKERS = [
+  { tokens: ['1xbet', '1x bet'], title: '1xBet' },
+  { tokens: ['bet365'], title: 'Bet365 BR' },
+  { tokens: ['betano'], title: 'Betano BR' },
+  { tokens: ['betfair'], title: 'Betfair BR' },
+  { tokens: ['estrela bet', 'estrelabet'], title: 'Estrela Bet BR' },
+  { tokens: ['kto'], title: 'KTO BR' },
+  { tokens: ['sportingbet', 'sporting bet'], title: 'SportingBet BR' },
+  { tokens: ['superbet'], title: 'Superbet BR' }
+];
 const memoryCache = new Map();
+const bookmakerCatalogCache = { expiresAt: 0, slugs: [] };
 
 function json(status, body, headers = {}) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store, no-cache, must-revalidate', ...headers } });
@@ -16,8 +26,23 @@ function dayBounds(date) {
   return { from: oddsTimestamp(start), to: oddsTimestamp(end) };
 }
 function cacheKey(source, date, config) { return `odds-v4:${source}:${date}:${config}`; }
+function normalizeBookmaker(value) { return text(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
 function bookmakerTitle(slug) {
-  return ({ '1xbet': '1xBet', bet365: 'Bet365 BR', betano: 'Betano BR', betfair: 'Betfair BR', estrelabet: 'Estrela Bet BR', 'estrela-bet': 'Estrela Bet BR', kto: 'KTO BR', sportingbet: 'SportingBet BR', superbet: 'Superbet BR' }[slug] || slug);
+  const normalized = normalizeBookmaker(slug);
+  return TARGET_BOOKMAKERS.find(item => item.tokens.some(token => normalized.includes(normalizeBookmaker(token))))?.title || slug;
+}
+async function resolveBookmakers(apiKey) {
+  const requested = listEnv('ODDSPAPI_BOOKMAKERS', []);
+  if (!requested.length && bookmakerCatalogCache.expiresAt > Date.now()) return bookmakerCatalogCache.slugs;
+  const catalogResult = await fetchJson(`https://api.oddspapi.io/v4/bookmakers?${new URLSearchParams({ apiKey }).toString()}`);
+  const catalog = Array.isArray(catalogResult.body) ? catalogResult.body : [];
+  const wanted = requested.length ? requested.map(item => ({ tokens: [item], title: item })) : TARGET_BOOKMAKERS;
+  const slugs = wanted.map(target => {
+    const found = catalog.find(item => target.tokens.some(token => normalizeBookmaker(item?.slug || '').includes(normalizeBookmaker(token)) || normalizeBookmaker(item?.bookmakerName || '').includes(normalizeBookmaker(token))));
+    return found?.slug ? text(found.slug) : '';
+  }).filter(Boolean).filter((slug, index, list) => list.indexOf(slug) === index);
+  if (!requested.length) { bookmakerCatalogCache.slugs = slugs; bookmakerCatalogCache.expiresAt = Date.now() + 24 * 60 * 60 * 1000; }
+  return slugs;
 }
 function normalizeEvent(event, sportKey) {
   return {
@@ -78,7 +103,7 @@ async function cachedRequest(key, date, source, loader) {
   return { body, cache: 'miss' };
 }
 async function fetchOddsPapi(date, apiKey) {
-  const bookmakers = listEnv('ODDSPAPI_BOOKMAKERS', DEFAULT_ODDSPAPI_BOOKMAKERS);
+  const bookmakers = await resolveBookmakers(apiKey);
   const bounds = dayBounds(date);
   const bookmakerParam = bookmakers.join(',');
   const config = `bookmakers=${bookmakerParam}`;
@@ -89,7 +114,8 @@ async function fetchOddsPapi(date, apiKey) {
     const fixturesResult = await fetchJson(fixturesUrl);
     const fixtures = Array.isArray(fixturesResult.body) ? fixturesResult.body : [];
     const tournamentIds = [...new Set(fixtures.map(item => item?.tournamentId).filter(Boolean).map(String))];
-    if (!tournamentIds.length) return { success: true, source: 'oddspapi', date, timezone: 'America/Sao_Paulo', events: [], fetchedAt: new Date().toISOString(), meta: { bookmakerCount: bookmakers.length, fixtureCount: 0, apiCalls: 1 }, warnings: ['ODDSPAPI_NO_FIXTURES_FOR_DATE'] };
+    if (!bookmakers.length) return { success: true, source: 'oddspapi', date, timezone: 'America/Sao_Paulo', events: [], fetchedAt: new Date().toISOString(), meta: { bookmakerCount: 0, fixtureCount: fixtures.length, apiCalls: 2 }, warnings: ['ODDSPAPI_TARGET_BOOKMAKERS_NOT_FOUND'] };
+    if (!tournamentIds.length) return { success: true, source: 'oddspapi', date, timezone: 'America/Sao_Paulo', events: [], fetchedAt: new Date().toISOString(), meta: { bookmakerCount: bookmakers.length, fixtureCount: 0, apiCalls: 2 }, warnings: ['ODDSPAPI_NO_FIXTURES_FOR_DATE'] };
     const oddsUrl = new URL('https://api.oddspapi.io/v4/odds-by-tournaments');
     oddsUrl.search = new URLSearchParams({ apiKey, tournamentIds: tournamentIds.join(','), bookmakers: bookmakerParam, language: 'en', verbosity: '3', oddsFormat: 'decimal' }).toString();
     const oddsResult = await fetchJson(oddsUrl);
