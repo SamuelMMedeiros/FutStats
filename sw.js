@@ -1,4 +1,4 @@
-const CACHE_NAME = 'futstats-shell-v4';
+const CACHE_NAME = 'futstats-shell-v5';
 const APP_SHELL = ['./', './index.html', './manifest.json', './js/core.js', './js/storage.js', './js/parser.js', './js/statistics.js'];
 
 self.addEventListener('install', event => {

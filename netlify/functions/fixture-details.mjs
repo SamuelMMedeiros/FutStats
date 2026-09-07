@@ -71,34 +71,14 @@ export default async function fixtureDetails(req) {
       const key = Netlify.env.get('FOOTBALL_DATA_API_KEY'); if (!key) return json(503, { success: false, error: 'FOOTBALL_DATA_NOT_CONFIGURED' });
       const footballData = await apiJson(`https://api.football-data.org/v4/matches/${encodeURIComponent(id)}`, { headers: { 'X-Auth-Token': key } });
       details = footballDataDetail(footballData);
-      const apiKey = Netlify.env.get('API_FOOTBALL_KEY');
-      if (apiKey) {
-        details.oddsStatus = 'searching';
-        const home = footballData?.homeTeam?.name; const away = footballData?.awayTeam?.name; const matchDate = localDateFromValue(footballData?.utcDate);
-        if (await consumeBudget()) {
-          try {
-            const candidates = await apiJson(`https://v3.football.api-sports.io/fixtures?date=${encodeURIComponent(matchDate)}&timezone=${encodeURIComponent(TZ)}`, { headers: { 'x-apisports-key': apiKey } });
-            const candidate = findFixtureByTeams(candidates, home, away);
-            if (!candidate) { details.oddsStatus = 'unavailable'; details.oddsMessage = 'A API-Football não possui correspondência para esta partida.'; }
-            if (candidate && await consumeBudget()) {
-              let oddsData = { response: [] }; let oddsStatus = 'unavailable';
-              try { oddsData = await apiJson(`https://v3.football.api-sports.io/odds?fixture=${encodeURIComponent(candidate.fixture?.id)}`, { headers: { 'x-apisports-key': apiKey } }); oddsStatus = 'available'; } catch {}
-              const enriched = apiFootballDetail({ response: [candidate] }, oddsData, oddsStatus);
-              details = { ...details, ...enriched, score: details.score, detailsSource: 'football-data.org+api-football', apiFootballFixtureId: candidate.fixture?.id };
-            }
-          } catch { details.oddsStatus = 'unavailable'; }
-        } else { details.oddsStatus = 'daily-limit'; details.oddsMessage = 'Limite diário preservado.'; }
-      } else details.oddsMessage = 'API-Football não configurada.';
+      details.oddsStatus = 'deferred';
+      details.oddsMessage = 'Mercados e odds são carregados uma vez pela Odds API quando os detalhes da partida são abertos.';
     } else if (source === 'api-football') {
       const key = Netlify.env.get('API_FOOTBALL_KEY'); if (!key) return json(503, { success: false, error: 'API_FOOTBALL_NOT_CONFIGURED' });
       if (!await consumeBudget()) return json(429, { success: false, error: 'API_FOOTBALL_DAILY_LIMIT' });
       const fixtureData = await apiJson(`https://v3.football.api-sports.io/fixtures?id=${encodeURIComponent(id)}`, { headers: { 'x-apisports-key': key } });
-      let oddsData = { response: [] }; let oddsStatus = 'not-requested';
-      if (await consumeBudget()) {
-        try { oddsData = await apiJson(`https://v3.football.api-sports.io/odds?fixture=${encodeURIComponent(id)}`, { headers: { 'x-apisports-key': key } }); oddsStatus = 'available'; }
-        catch { oddsStatus = 'unavailable'; }
-      } else oddsStatus = 'daily-limit';
-      details = apiFootballDetail(fixtureData, oddsData, oddsStatus);
+      details = apiFootballDetail(fixtureData, { response: [] }, 'deferred');
+      details.oddsMessage = 'Mercados e odds são carregados uma vez pela Odds API quando os detalhes da partida são abertos.';
     } else return json(400, { success: false, error: 'UNKNOWN_SOURCE' });
     detailCache.set(cacheKey, { expiresAt: Date.now() + 120000, details });
     return json(200, { success: true, details });
