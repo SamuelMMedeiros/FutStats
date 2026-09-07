@@ -116,13 +116,27 @@ async function fetchOddsPapi(date, apiKey) {
     const tournamentIds = [...new Set(fixtures.map(item => item?.tournamentId).filter(Boolean).map(String))];
     if (!bookmakers.length) return { success: true, source: 'oddspapi', date, timezone: 'America/Sao_Paulo', events: [], fetchedAt: new Date().toISOString(), meta: { bookmakerCount: 0, fixtureCount: fixtures.length, apiCalls: 2 }, warnings: ['ODDSPAPI_TARGET_BOOKMAKERS_NOT_FOUND'] };
     if (!tournamentIds.length) return { success: true, source: 'oddspapi', date, timezone: 'America/Sao_Paulo', events: [], fetchedAt: new Date().toISOString(), meta: { bookmakerCount: bookmakers.length, fixtureCount: 0, apiCalls: 2 }, warnings: ['ODDSPAPI_NO_FIXTURES_FOR_DATE'] };
-    const oddsUrl = new URL('https://api.oddspapi.io/v4/odds-by-tournaments');
-    oddsUrl.search = new URLSearchParams({ apiKey, tournamentIds: tournamentIds.join(','), bookmakers: bookmakerParam, language: 'en', verbosity: '3', oddsFormat: 'decimal' }).toString();
-    const oddsResult = await fetchJson(oddsUrl);
-    const oddsRows = Array.isArray(oddsResult.body) ? oddsResult.body : (oddsResult.body && typeof oddsResult.body === 'object' ? [oddsResult.body] : []);
     const fixtureById = new Map(fixtures.map(item => [text(item.fixtureId), item]));
-    const events = oddsRows.map(row => ({ ...row, participant1Name: row.participant1Name || fixtureById.get(text(row.fixtureId))?.participant1Name, participant2Name: row.participant2Name || fixtureById.get(text(row.fixtureId))?.participant2Name, startTime: row.startTime || fixtureById.get(text(row.fixtureId))?.startTime })).filter(row => { const start = new Date(row.startTime); return !Number.isNaN(start.getTime()) && start >= new Date(bounds.from) && start <= new Date(bounds.to); }).map(row => normalizeOddsPapiEvent(row, bookmakers)).filter(event => event.id && event.homeTeam && event.awayTeam && event.bookmakers.length);
-    return { success: true, source: 'oddspapi', date, timezone: 'America/Sao_Paulo', events, fetchedAt: new Date().toISOString(), meta: { bookmakerCount: bookmakers.length, fixtureCount: fixtures.length, tournamentCount: tournamentIds.length, eventCount: events.length, apiCalls: 2 }, warnings: [] };
+    const mergedByFixture = new Map();
+    const warnings = [];
+    for (let index = 0; index < bookmakers.length; index += 1) {
+      const bookmaker = bookmakers[index];
+      if (index > 0) await new Promise(resolve => setTimeout(resolve, 1100));
+      const oddsUrl = new URL('https://api.oddspapi.io/v4/odds-by-tournaments');
+      oddsUrl.search = new URLSearchParams({ apiKey, tournamentIds: tournamentIds.join(','), bookmaker, language: 'en', verbosity: '3', oddsFormat: 'decimal' }).toString();
+      try {
+        const oddsResult = await fetchJson(oddsUrl);
+        const rows = Array.isArray(oddsResult.body) ? oddsResult.body : (oddsResult.body && typeof oddsResult.body === 'object' ? [oddsResult.body] : []);
+        rows.forEach(row => {
+          const id = text(row.fixtureId);
+          if (!id) return;
+          const previous = mergedByFixture.get(id) || { ...row, bookmakerOdds: {} };
+          mergedByFixture.set(id, { ...previous, ...row, participant1Name: row.participant1Name || previous.participant1Name || fixtureById.get(id)?.participant1Name, participant2Name: row.participant2Name || previous.participant2Name || fixtureById.get(id)?.participant2Name, startTime: row.startTime || previous.startTime || fixtureById.get(id)?.startTime, bookmakerOdds: { ...(previous.bookmakerOdds || {}), ...(row.bookmakerOdds || {}) } });
+        });
+      } catch (error) { warnings.push({ bookmaker, error: error.message }); }
+    }
+    const events = [...mergedByFixture.values()].map(row => ({ ...row, participant1Name: row.participant1Name || fixtureById.get(text(row.fixtureId))?.participant1Name, participant2Name: row.participant2Name || fixtureById.get(text(row.fixtureId))?.participant2Name, startTime: row.startTime || fixtureById.get(text(row.fixtureId))?.startTime })).filter(row => { const start = new Date(row.startTime); return !Number.isNaN(start.getTime()) && start >= new Date(bounds.from) && start <= new Date(bounds.to); }).map(row => normalizeOddsPapiEvent(row, bookmakers)).filter(event => event.id && event.homeTeam && event.awayTeam && event.bookmakers.length);
+    return { success: true, source: 'oddspapi', date, timezone: 'America/Sao_Paulo', events, fetchedAt: new Date().toISOString(), meta: { bookmakerCount: bookmakers.length, fixtureCount: fixtures.length, tournamentCount: tournamentIds.length, eventCount: events.length, apiCalls: 2 + bookmakers.length }, warnings };
   });
 }
 async function fetchTheOddsApi(date, apiKey) {
