@@ -1639,6 +1639,7 @@ Apresente em formato limpo:
 
       if (filtered.length === 0) {
         emptyState.classList.remove('hidden');
+        if (window.ScoreShell) window.ScoreShell.sync({ total: 0, live: 0, ai: matchesData.filter(match => match.aiAnalysis).length, coverage: preloadWindow.from && preloadWindow.to ? `Snapshot ${preloadWindow.from} → ${preloadWindow.to}` : 'Snapshot local' });
         return;
       } else {
         emptyState.classList.add('hidden');
@@ -1790,9 +1791,9 @@ Apresente em formato limpo:
         cardsContainer.appendChild(card);
       });
       if (window.ScoreShell) {
-        const liveTotal = visibleMatches.filter(match => core.getMatchStatus(match) === 'live').length;
+        const liveTotal = filtered.filter(match => core.getMatchStatus(match) === 'live').length;
         const aiTotal = matchesData.filter(match => match.aiAnalysis).length;
-        window.ScoreShell.sync({ total: visibleMatches.length, live: liveTotal, ai: aiTotal, coverage: preloadWindow.from && preloadWindow.to ? `Snapshot ${preloadWindow.from} → ${preloadWindow.to}` : 'Snapshot local' });
+        window.ScoreShell.sync({ total: filtered.length, live: liveTotal, ai: aiTotal, coverage: preloadWindow.from && preloadWindow.to ? `Snapshot ${preloadWindow.from} → ${preloadWindow.to}` : 'Snapshot local' });
       }
     }
 
