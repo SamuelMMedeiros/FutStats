@@ -984,9 +984,13 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
         match.aiAnalysis = normalizeAIResponse(resultText);
         saveToLocalStorage();
         renderCards();
+        matchDetailsModal.dataset.matchId = match.id;
+        renderMatchModal(match);
+        matchDetailsModal.classList.remove('hidden');
         showToast("Análise da IA gerada!");
       } catch (e) {
-        showToast("Erro ao conectar à IA.");
+        console.error('[FutStats] Falha na análise Gemini', e);
+        showToast(`Erro ao conectar à IA${e?.message ? `: ${e.message}` : '.'}`);
       }
     }
 

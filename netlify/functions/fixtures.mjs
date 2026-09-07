@@ -16,7 +16,7 @@ function validDate(value) {
 function text(value) { return value === undefined || value === null ? '' : String(value).trim(); }
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 function isoLocalDate(date) { return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date); }
-function dateKey(start, end) { return `fixtures-v2:${start}:${end}`; }
+function dateKey(start, end) { return `fixtures-v3:${start}:${end}`; }
 function addDays(iso, amount) { const date = new Date(`${iso}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + amount); return isoLocalDate(date); }
 function dateChunks(start, end, maxDays = 7) {
   const chunks = []; let cursor = start;
@@ -141,14 +141,15 @@ export default async function fixtures(req) {
     } catch (error) { primaryError = error.message; }
   }
   let secondary = []; let secondaryUsed = false; let secondaryError = null;
-  const primaryDates = new Set(primary.map(item => item.dateTime ? isoLocalDate(new Date(item.dateTime)) : null).filter(Boolean));
-  const missingDates = [...dateSet(start, end)].some(date => !primaryDates.has(date));
-  if (secondaryKey && missingDates && await consumeApiFootballBudget()) {
+  if (secondaryKey && await consumeApiFootballBudget()) {
     secondaryUsed = true;
     try {
       const data = await fetchJson(`https://v3.football.api-sports.io/fixtures?from=${start}&to=${end}&timezone=${encodeURIComponent(TZ)}`, { headers: { 'x-apisports-key': secondaryKey } });
       const available = Array.isArray(data?.response) ? data.response.map(normalizeApiFootball) : [];
-      secondary = available.filter(item => { const date = item.dateTime ? isoLocalDate(new Date(item.dateTime)) : ''; return date && !primaryDates.has(date); });
+      secondary = available.filter(item => {
+        const date = item.dateTime ? isoLocalDate(new Date(item.dateTime)) : '';
+        return date >= start && date <= end;
+      });
     } catch (error) { secondaryError = error.message; }
   }
   const matches = mergeMatches(primary, secondary);
