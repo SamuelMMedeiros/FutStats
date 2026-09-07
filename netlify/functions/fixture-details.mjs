@@ -73,11 +73,13 @@ export default async function fixtureDetails(req) {
       details = footballDataDetail(footballData);
       const apiKey = Netlify.env.get('API_FOOTBALL_KEY');
       if (apiKey) {
+        details.oddsStatus = 'searching';
         const home = footballData?.homeTeam?.name; const away = footballData?.awayTeam?.name; const matchDate = localDateFromValue(footballData?.utcDate);
         if (await consumeBudget()) {
           try {
             const candidates = await apiJson(`https://v3.football.api-sports.io/fixtures?date=${encodeURIComponent(matchDate)}&timezone=${encodeURIComponent(TZ)}`, { headers: { 'x-apisports-key': apiKey } });
             const candidate = findFixtureByTeams(candidates, home, away);
+            if (!candidate) { details.oddsStatus = 'unavailable'; details.oddsMessage = 'A API-Football não possui correspondência para esta partida.'; }
             if (candidate && await consumeBudget()) {
               let oddsData = { response: [] }; let oddsStatus = 'unavailable';
               try { oddsData = await apiJson(`https://v3.football.api-sports.io/odds?fixture=${encodeURIComponent(candidate.fixture?.id)}`, { headers: { 'x-apisports-key': apiKey } }); oddsStatus = 'available'; } catch {}
@@ -85,8 +87,8 @@ export default async function fixtureDetails(req) {
               details = { ...details, ...enriched, score: details.score, detailsSource: 'football-data.org+api-football', apiFootballFixtureId: candidate.fixture?.id };
             }
           } catch { details.oddsStatus = 'unavailable'; }
-        } else details.oddsStatus = 'daily-limit';
-      }
+        } else { details.oddsStatus = 'daily-limit'; details.oddsMessage = 'Limite diário preservado.'; }
+      } else details.oddsMessage = 'API-Football não configurada.';
     } else if (source === 'api-football') {
       const key = Netlify.env.get('API_FOOTBALL_KEY'); if (!key) return json(503, { success: false, error: 'API_FOOTBALL_NOT_CONFIGURED' });
       if (!await consumeBudget()) return json(429, { success: false, error: 'API_FOOTBALL_DAILY_LIMIT' });

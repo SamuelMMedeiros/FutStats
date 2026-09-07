@@ -703,7 +703,7 @@ Sugestão de odd combinada: 1.45 — Mais de 1,5 gols e Mais de 8,5 escanteios.`
       const status = document.createElement('span'); status.className = 'text-[10px] text-slate-400'; status.textContent = match.oddsStatus === 'available' ? 'Cache da partida' : (match.oddsStatus === 'not-supported-for-source' ? 'Fonte sem odds' : 'Não consultadas');
       heading.append(title, status); section.appendChild(heading);
       const odds = Array.isArray(match.odds) ? match.odds : [];
-      if (!odds.length) { const empty = document.createElement('p'); empty.className = 'text-xs text-slate-400'; empty.textContent = match.oddsStatus === 'daily-limit' ? 'Limite diário preservado. As odds não foram consultadas.' : 'Odds não disponíveis para esta partida ou fonte.'; section.appendChild(empty); return section; }
+      if (!odds.length) { const empty = document.createElement('p'); empty.className = 'text-xs text-slate-400'; empty.textContent = match.oddsMessage || (match.oddsStatus === 'daily-limit' ? 'Limite diário preservado. As odds não foram consultadas.' : match.oddsStatus === 'not-supported-for-source' ? 'A fonte principal não fornece odds para esta partida.' : 'Odds não disponíveis para esta partida ou fonte.'); section.appendChild(empty); return section; }
       odds.forEach(bookmaker => {
         const box = document.createElement('div'); box.className = 'rounded-lg border border-slate-700 bg-slate-800/70 p-2 space-y-2';
         const name = document.createElement('div'); name.className = 'text-xs font-bold text-white'; name.textContent = bookmaker.bookmaker; box.appendChild(name);
