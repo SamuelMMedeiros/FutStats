@@ -18,6 +18,15 @@ function number(value) { const parsed = Number(value); return Number.isFinite(pa
 function isoLocalDate(date) { return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date); }
 function dateKey(start, end) { return `fixtures:${start}:${end}`; }
 function addDays(iso, amount) { const date = new Date(`${iso}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + amount); return isoLocalDate(date); }
+function dateChunks(start, end, maxDays = 7) {
+  const chunks = []; let cursor = start;
+  while (cursor <= end) {
+    const chunkEnd = addDays(cursor, maxDays - 1) < end ? addDays(cursor, maxDays - 1) : end;
+    chunks.push([cursor, chunkEnd]);
+    cursor = addDays(chunkEnd, 1);
+  }
+  return chunks;
+}
 
 function statusFromFootballData(status) {
   return ({ SCHEDULED: 'scheduled', TIMED: 'scheduled', IN_PLAY: 'live', PAUSED: 'live', FINISHED: 'finished', POSTPONED: 'postponed', SUSPENDED: 'suspended', CANCELLED: 'cancelled' })[status] || 'scheduled';
@@ -123,8 +132,12 @@ export default async function fixtures(req) {
   const primaryKey = Netlify.env.get('FOOTBALL_DATA_API_KEY'); const secondaryKey = Netlify.env.get('API_FOOTBALL_KEY');
   let primary = []; let primaryError = null;
   if (primaryKey) {
-    try { const data = await fetchJson(`https://api.football-data.org/v4/matches?dateFrom=${start}&dateTo=${end}`, { headers: { 'X-Auth-Token': primaryKey } }); primary = Array.isArray(data?.matches) ? data.matches.map(normalizeFootballData) : []; }
-    catch (error) { primaryError = error.message; }
+    try {
+      for (const [chunkStart, chunkEnd] of dateChunks(start, end)) {
+        const data = await fetchJson(`https://api.football-data.org/v4/matches?dateFrom=${chunkStart}&dateTo=${chunkEnd}`, { headers: { 'X-Auth-Token': primaryKey } });
+        if (Array.isArray(data?.matches)) primary.push(...data.matches.map(normalizeFootballData));
+      }
+    } catch (error) { primaryError = error.message; }
   }
   let secondary = []; let secondaryUsed = false; let secondaryError = null;
   if (secondaryKey && primary.length === 0 && await consumeApiFootballBudget()) {
