@@ -113,7 +113,11 @@ async function fetchOddsPapi(date, apiKey) {
     fixturesUrl.search = new URLSearchParams({ apiKey, sportId: '10', from: bounds.from, to: bounds.to, hasOdds: 'true', bookmakers: bookmakerParam, language: 'en' }).toString();
     const fixturesResult = await fetchJson(fixturesUrl);
     const fixtures = Array.isArray(fixturesResult.body) ? fixturesResult.body : [];
-    const tournamentIds = [...new Set(fixtures.map(item => item?.tournamentId).filter(Boolean).map(String))];
+    const tournamentCounts = new Map();
+    fixtures.forEach(item => { const id = text(item?.tournamentId); if (id) tournamentCounts.set(id, (tournamentCounts.get(id) || 0) + 1); });
+    const maxTournaments = Math.max(1, Math.min(5, Number(Netlify.env.get('ODDSPAPI_MAX_TOURNAMENTS') || 5)));
+    const allTournamentIds = [...tournamentCounts.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
+    const tournamentIds = allTournamentIds.slice(0, maxTournaments);
     if (!bookmakers.length) return { success: true, source: 'oddspapi', date, timezone: 'America/Sao_Paulo', events: [], fetchedAt: new Date().toISOString(), meta: { bookmakerCount: 0, fixtureCount: fixtures.length, apiCalls: 2 }, warnings: ['ODDSPAPI_TARGET_BOOKMAKERS_NOT_FOUND'] };
     if (!tournamentIds.length) return { success: true, source: 'oddspapi', date, timezone: 'America/Sao_Paulo', events: [], fetchedAt: new Date().toISOString(), meta: { bookmakerCount: bookmakers.length, fixtureCount: 0, apiCalls: 2 }, warnings: ['ODDSPAPI_NO_FIXTURES_FOR_DATE'] };
     const fixtureById = new Map(fixtures.map(item => [text(item.fixtureId), item]));
@@ -136,7 +140,8 @@ async function fetchOddsPapi(date, apiKey) {
       } catch (error) { warnings.push({ bookmaker, error: error.message }); }
     }
     const events = [...mergedByFixture.values()].map(row => ({ ...row, participant1Name: row.participant1Name || fixtureById.get(text(row.fixtureId))?.participant1Name, participant2Name: row.participant2Name || fixtureById.get(text(row.fixtureId))?.participant2Name, startTime: row.startTime || fixtureById.get(text(row.fixtureId))?.startTime })).filter(row => { const start = new Date(row.startTime); return !Number.isNaN(start.getTime()) && start >= new Date(bounds.from) && start <= new Date(bounds.to); }).map(row => normalizeOddsPapiEvent(row, bookmakers)).filter(event => event.id && event.homeTeam && event.awayTeam && event.bookmakers.length);
-    return { success: true, source: 'oddspapi', date, timezone: 'America/Sao_Paulo', events, fetchedAt: new Date().toISOString(), meta: { bookmakerCount: bookmakers.length, fixtureCount: fixtures.length, tournamentCount: tournamentIds.length, eventCount: events.length, apiCalls: 2 + bookmakers.length }, warnings };
+    if (allTournamentIds.length > tournamentIds.length) warnings.push(`ODDSPAPI_TOURNAMENT_COVERAGE_LIMIT:${allTournamentIds.length - tournamentIds.length}`);
+    return { success: true, source: 'oddspapi', date, timezone: 'America/Sao_Paulo', events, fetchedAt: new Date().toISOString(), meta: { bookmakerCount: bookmakers.length, fixtureCount: fixtures.length, tournamentCount: tournamentIds.length, omittedTournamentCount: Math.max(0, allTournamentIds.length - tournamentIds.length), eventCount: events.length, apiCalls: 2 + bookmakers.length }, warnings };
   });
 }
 async function fetchTheOddsApi(date, apiKey) {
