@@ -8,7 +8,12 @@ function json(status, body, headers = {}) {
 function validDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : null; }
 function text(value) { return value == null ? '' : String(value).trim(); }
 function listEnv(name, fallback) { const value = text(Netlify.env.get(name)); return value ? value.split(',').map(item => item.trim()).filter(Boolean) : fallback; }
-function dayBounds(date) { return { from: `${date}T00:00:00-03:00`, to: `${date}T23:59:59-03:00` }; }
+function dayBounds(date) {
+  // America/Sao_Paulo is UTC-03:00. The Odds API validates these filters most reliably in UTC.
+  const start = new Date(`${date}T03:00:00.000Z`);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
+  return { from: start.toISOString(), to: end.toISOString() };
+}
 function cacheKey(date, sports, regions, markets) { return `odds-v1:${date}:${sports.join(',')}:${regions.join(',')}:${markets.join(',')}`; }
 function normalizeTeam(value) { return text(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
 function normalizeEvent(event, sportKey) {
@@ -20,7 +25,10 @@ function normalizeEvent(event, sportKey) {
 async function fetchJson(url) {
   const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`ODDS_API_${response.status}`);
+  if (!response.ok) {
+    const upstream = text(body?.message || body?.error || body?.code);
+    throw new Error(`ODDS_API_${response.status}${upstream ? `_${upstream}` : ''}`);
+  }
   return { body, headers: { remaining: response.headers.get('x-requests-remaining'), used: response.headers.get('x-requests-used'), last: response.headers.get('x-requests-last') } };
 }
 async function readCache(key) {
