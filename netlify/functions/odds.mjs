@@ -25,7 +25,7 @@ function dayBounds(date) {
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1000);
   return { from: oddsTimestamp(start), to: oddsTimestamp(end) };
 }
-function cacheKey(source, date, config) { return `odds-v4:${source}:${date}:${config}`; }
+function cacheKey(source, date, config) { return `odds-v5:${source}:${date}:${config}`; }
 function normalizeBookmaker(value) { return text(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
 function bookmakerTitle(slug) {
   const normalized = normalizeBookmaker(slug);
