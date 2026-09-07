@@ -27,6 +27,7 @@ function dateChunks(start, end, maxDays = 7) {
   }
   return chunks;
 }
+function dateSet(start, end) { const dates = new Set(); for (let cursor = start; cursor <= end; cursor = addDays(cursor, 1)) dates.add(cursor); return dates; }
 
 function statusFromFootballData(status) {
   return ({ SCHEDULED: 'scheduled', TIMED: 'scheduled', IN_PLAY: 'live', PAUSED: 'live', FINISHED: 'finished', POSTPONED: 'postponed', SUSPENDED: 'suspended', CANCELLED: 'cancelled' })[status] || 'scheduled';
@@ -140,10 +141,15 @@ export default async function fixtures(req) {
     } catch (error) { primaryError = error.message; }
   }
   let secondary = []; let secondaryUsed = false; let secondaryError = null;
-  if (secondaryKey && primary.length === 0 && await consumeApiFootballBudget()) {
+  const primaryDates = new Set(primary.map(item => item.dateTime ? isoLocalDate(new Date(item.dateTime)) : null).filter(Boolean));
+  const missingDates = [...dateSet(start, end)].some(date => !primaryDates.has(date));
+  if (secondaryKey && missingDates && await consumeApiFootballBudget()) {
     secondaryUsed = true;
-    try { const data = await fetchJson(`https://v3.football.api-sports.io/fixtures?from=${start}&to=${end}&timezone=${encodeURIComponent(TZ)}`, { headers: { 'x-apisports-key': secondaryKey } }); secondary = Array.isArray(data?.response) ? data.response.map(normalizeApiFootball) : []; }
-    catch (error) { secondaryError = error.message; }
+    try {
+      const data = await fetchJson(`https://v3.football.api-sports.io/fixtures?from=${start}&to=${end}&timezone=${encodeURIComponent(TZ)}`, { headers: { 'x-apisports-key': secondaryKey } });
+      const available = Array.isArray(data?.response) ? data.response.map(normalizeApiFootball) : [];
+      secondary = available.filter(item => { const date = item.dateTime ? isoLocalDate(new Date(item.dateTime)) : ''; return date && !primaryDates.has(date); });
+    } catch (error) { secondaryError = error.message; }
   }
   const matches = mergeMatches(primary, secondary);
   const body = { success: true, date: start === end ? start : null, from: start, to: end, timezone: TZ, matches, meta: { primary: 'football-data.org', primaryCount: primary.length, secondary: 'api-football', secondaryUsed, secondaryCount: secondary.length, primaryError, secondaryError, fetchedAt: new Date().toISOString() } };
