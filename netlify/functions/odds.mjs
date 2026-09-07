@@ -49,7 +49,8 @@ async function fetchJson(url) {
   const response = await fetch(url, { signal: AbortSignal.timeout(20000) });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const upstream = text(body?.message || body?.error || body?.code);
+    const upstreamValue = body?.message || body?.error || body?.code || body;
+    const upstream = typeof upstreamValue === 'string' ? upstreamValue : JSON.stringify(upstreamValue).slice(0, 500);
     throw new Error(`UPSTREAM_${response.status}${upstream ? `_${upstream}` : ''}`);
   }
   return { body, headers: { remaining: response.headers.get('x-requests-remaining'), used: response.headers.get('x-requests-used'), last: response.headers.get('x-requests-last') } };
